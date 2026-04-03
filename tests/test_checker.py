@@ -85,3 +85,41 @@ def test_should_alert_when_triggered_exactly_three_days_ago():
     three_days_ago = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
     alarm = {"last_triggered": three_days_ago}
     assert should_alert(alarm) is True
+
+
+from checker import format_subject, format_body
+
+
+# --- format_subject tests ---
+
+def test_format_subject_upper_limit():
+    subject = format_subject("AAPL", 231.50, "upper", 230.00)
+    assert subject == "Stock Alert: AAPL hit $231.50 (upper limit: $230.00)"
+
+def test_format_subject_lower_limit():
+    subject = format_subject("TSLA", 98.75, "lower", 100.00)
+    assert subject == "Stock Alert: TSLA hit $98.75 (lower limit: $100.00)"
+
+
+# --- format_body tests ---
+
+def test_format_body_contains_ticker():
+    body = format_body("AAPL", 231.50, "upper", 230.00)
+    assert "AAPL" in body
+
+def test_format_body_contains_price():
+    body = format_body("AAPL", 231.50, "upper", 230.00)
+    assert "$231.50" in body
+
+def test_format_body_contains_limit_value():
+    body = format_body("AAPL", 231.50, "upper", 230.00)
+    assert "$230.00" in body
+
+def test_format_body_contains_limit_type():
+    body = format_body("AAPL", 231.50, "upper", 230.00)
+    assert "upper" in body
+
+def test_format_body_lower_limit():
+    body = format_body("TSLA", 98.75, "lower", 100.00)
+    assert "lower" in body
+    assert "$98.75" in body

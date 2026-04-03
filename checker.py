@@ -27,3 +27,19 @@ def should_alert(alarm: dict) -> bool:
         return True
     last_dt = datetime.fromisoformat(last)
     return datetime.now(timezone.utc) - last_dt >= timedelta(days=3)
+
+
+def format_subject(ticker: str, price: float, limit_type: str, limit_value: float) -> str:
+    return f"Stock Alert: {ticker} hit ${price:.2f} ({limit_type} limit: ${limit_value:.2f})"
+
+
+def format_body(ticker: str, price: float, limit_type: str, limit_value: float) -> str:
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    return (
+        f"Stock Alert\n\n"
+        f"Ticker: {ticker}\n"
+        f"Current Price: ${price:.2f}\n"
+        f"Limit Triggered: {limit_type} limit (${limit_value:.2f})\n"
+        f"Time: {now}\n\n"
+        f"To disable this alarm, set \"enabled\": false in alarms.json and push to GitHub."
+    )
