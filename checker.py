@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import smtplib
+import tempfile
 from email.mime.text import MIMEText
 
 import yfinance as yf
@@ -67,8 +68,11 @@ def load_alarms(path: str) -> list:
 
 
 def save_alarms(alarms: list, path: str) -> None:
-    with open(path, "w") as f:
+    dir_name = os.path.dirname(path) or "."
+    with tempfile.NamedTemporaryFile("w", dir=dir_name, delete=False, suffix=".tmp") as f:
         json.dump(alarms, f, indent=2)
+        tmp_path = f.name
+    os.replace(tmp_path, path)
 
 
 def get_price(ticker: str) -> float:
@@ -111,7 +115,11 @@ def run() -> None:
             print(f"[SKIP] {alarm.get('id', alarm.get('ticker'))} is disabled")
             continue
 
-        ticker = alarm["ticker"]
+        try:
+            ticker = alarm["ticker"]
+        except KeyError:
+            print(f"[ERROR] Alarm {alarm.get('id', '?')} is missing required field 'ticker', skipping")
+            continue
 
         try:
             price = get_price(ticker)
@@ -131,6 +139,8 @@ def run() -> None:
                     alarm["last_triggered"] = datetime.now(timezone.utc).isoformat()
                     changed = True
                     print(f"[ALERT] Email sent for {ticker} at ${price:.2f}")
+                except KeyError:
+                    print(f"[ERROR] Alarm {ticker} is missing required field 'email', skipping")
                 except Exception as e:
                     print(f"[ERROR] Could not send email for {ticker}: {e}")
             else:
