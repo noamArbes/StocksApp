@@ -79,3 +79,15 @@ def get_price(ticker: str) -> float:
     if price is None:
         raise ValueError(f"Could not fetch price for ticker: {ticker}")
     return float(price)
+
+
+def send_email(subject: str, body: str, to: str, sender: str, password: str) -> None:
+    """Sends an email via Gmail SMTP SSL."""
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = sender
+    msg["To"] = to
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(sender, password)
+        server.send_message(msg)
