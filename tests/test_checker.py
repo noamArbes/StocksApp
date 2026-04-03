@@ -123,3 +123,49 @@ def test_format_body_lower_limit():
     body = format_body("TSLA", 98.75, "lower", 100.00)
     assert "lower" in body
     assert "$98.75" in body
+
+
+import json
+import os
+import tempfile
+from checker import load_alarms, save_alarms
+
+
+# --- load_alarms / save_alarms tests ---
+
+def test_load_alarms_returns_list():
+    alarms = [{"id": "a1", "ticker": "AAPL", "enabled": True, "last_triggered": None}]
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(alarms, f)
+        path = f.name
+    try:
+        result = load_alarms(path)
+        assert isinstance(result, list)
+        assert result[0]["ticker"] == "AAPL"
+    finally:
+        os.unlink(path)
+
+def test_save_and_reload_alarms():
+    alarms = [{"id": "a1", "ticker": "TSLA", "enabled": False, "last_triggered": "2026-01-01T00:00:00+00:00"}]
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        path = f.name
+    try:
+        save_alarms(alarms, path)
+        result = load_alarms(path)
+        assert result[0]["ticker"] == "TSLA"
+        assert result[0]["enabled"] is False
+        assert result[0]["last_triggered"] == "2026-01-01T00:00:00+00:00"
+    finally:
+        os.unlink(path)
+
+def test_save_alarms_writes_valid_json():
+    alarms = [{"id": "a1", "ticker": "GOOG", "enabled": True, "last_triggered": None}]
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        path = f.name
+    try:
+        save_alarms(alarms, path)
+        with open(path) as f:
+            data = json.load(f)
+        assert data[0]["ticker"] == "GOOG"
+    finally:
+        os.unlink(path)

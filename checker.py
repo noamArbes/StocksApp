@@ -43,3 +43,29 @@ def format_body(ticker: str, price: float, limit_type: str, limit_value: float) 
         f"Time: {now}\n\n"
         f"To disable this alarm, set \"enabled\": false in alarms.json and push to GitHub."
     )
+
+
+VOLUME_PATH = "/data/alarms.json"
+LOCAL_PATH = "alarms.json"
+
+
+def get_alarms_path() -> str:
+    """Returns the path to alarms.json — volume path on Railway, local path otherwise.
+    Copies the local template to the volume on first deploy."""
+    data_dir = "/data"
+    if os.path.isdir(data_dir):
+        volume_path = os.path.join(data_dir, "alarms.json")
+        if not os.path.exists(volume_path) and os.path.exists(LOCAL_PATH):
+            shutil.copy(LOCAL_PATH, volume_path)
+        return volume_path
+    return LOCAL_PATH
+
+
+def load_alarms(path: str) -> list:
+    with open(path, "r") as f:
+        return json.load(f)
+
+
+def save_alarms(alarms: list, path: str) -> None:
+    with open(path, "w") as f:
+        json.dump(alarms, f, indent=2)
