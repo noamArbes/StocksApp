@@ -91,3 +91,60 @@ def send_email(subject: str, body: str, to: str, sender: str, password: str) -> 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(sender, password)
         server.send_message(msg)
+
+
+def run() -> None:
+    sender = os.environ.get("GMAIL_SENDER")
+    password = os.environ.get("GMAIL_APP_PASSWORD")
+
+    if not sender or not password:
+        raise EnvironmentError(
+            "Missing required environment variables: GMAIL_SENDER and GMAIL_APP_PASSWORD"
+        )
+
+    path = get_alarms_path()
+    alarms = load_alarms(path)
+    changed = False
+
+    for alarm in alarms:
+        if not alarm.get("enabled", False):
+            print(f"[SKIP] {alarm.get('id', alarm.get('ticker'))} is disabled")
+            continue
+
+        ticker = alarm["ticker"]
+
+        try:
+            price = get_price(ticker)
+            print(f"[FETCH] {ticker}: ${price:.2f}")
+        except Exception as e:
+            print(f"[ERROR] Could not fetch price for {ticker}: {e}")
+            continue
+
+        triggered, limit_type, limit_value = condition_met(alarm, price)
+
+        if triggered:
+            if should_alert(alarm):
+                subject = format_subject(ticker, price, limit_type, limit_value)
+                body = format_body(ticker, price, limit_type, limit_value)
+                try:
+                    send_email(subject, body, alarm["email"], sender, password)
+                    alarm["last_triggered"] = datetime.now(timezone.utc).isoformat()
+                    changed = True
+                    print(f"[ALERT] Email sent for {ticker} at ${price:.2f}")
+                except Exception as e:
+                    print(f"[ERROR] Could not send email for {ticker}: {e}")
+            else:
+                print(f"[SKIP] {ticker} condition met but alert sent recently, skipping")
+        else:
+            if alarm.get("last_triggered") is not None:
+                alarm["last_triggered"] = None
+                changed = True
+            print(f"[OK] {ticker}: ${price:.2f} — no condition met")
+
+    if changed:
+        save_alarms(alarms, path)
+        print(f"[SAVED] Updated alarms saved to {path}")
+
+
+if __name__ == "__main__":
+    run()
