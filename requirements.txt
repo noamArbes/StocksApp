@@ -1,0 +1,2 @@
+yfinance>=0.2.36
+pytest>=8.0.0

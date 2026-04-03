@@ -1,0 +1,11 @@
+[
+  {
+    "id": "example_alarm",
+    "ticker": "AAPL",
+    "upper_limit": 230.00,
+    "lower_limit": 180.00,
+    "email": "you@gmail.com",
+    "enabled": false,
+    "last_triggered": null
+  }
+]
