@@ -69,3 +69,13 @@ def load_alarms(path: str) -> list:
 def save_alarms(alarms: list, path: str) -> None:
     with open(path, "w") as f:
         json.dump(alarms, f, indent=2)
+
+
+def get_price(ticker: str) -> float:
+    """Fetches the latest price for a ticker from Yahoo Finance.
+    Raises ValueError if the price cannot be retrieved."""
+    info = yf.Ticker(ticker).fast_info
+    price = info.last_price
+    if price is None:
+        raise ValueError(f"Could not fetch price for ticker: {ticker}")
+    return float(price)
