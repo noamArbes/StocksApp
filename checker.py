@@ -52,29 +52,32 @@ LOCAL_PATH = "alarms.json"
 
 def get_alarms_path() -> str:
     """Returns the path to alarms.json — volume path on Railway, local path otherwise.
-    On each deploy, syncs alarm config from the local file while preserving last_triggered."""
+    On each deploy, syncs alarm config from the local file while preserving runtime state."""
     data_dir = "/data"
     if os.path.isdir(data_dir):
         volume_path = os.path.join(data_dir, "alarms.json")
         if os.path.exists(LOCAL_PATH):
             with open(LOCAL_PATH) as f:
                 local_alarms = json.load(f)
-            # Preserve last_triggered from volume if it exists
             if os.path.exists(volume_path):
                 try:
                     with open(volume_path) as f:
                         volume_alarms = json.load(f)
-                    last_triggered_by_id = {
-                        a["id"]: a.get("last_triggered")
+                    volume_state = {
+                        a["id"]: a
                         for a in volume_alarms
                         if "id" in a
                     }
                     for alarm in local_alarms:
                         alarm_id = alarm.get("id")
-                        if alarm_id in last_triggered_by_id:
-                            alarm["last_triggered"] = last_triggered_by_id[alarm_id]
+                        if alarm_id in volume_state:
+                            vol = volume_state[alarm_id]
+                            alarm["last_triggered"] = vol.get("last_triggered")
+                            # Only restore base_price if local doesn't explicitly reset it
+                            if alarm.get("base_price") is None and vol.get("base_price") is not None:
+                                alarm["base_price"] = vol["base_price"]
                 except Exception:
-                    pass  # If volume file is corrupt, just use local
+                    pass
             save_alarms(local_alarms, volume_path)
         return volume_path
     return LOCAL_PATH

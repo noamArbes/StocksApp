@@ -4,6 +4,7 @@
     "ticker": "WDC",
     "upper_limit": 280.00,
     "lower_limit": null,
+    "timezone": "Asia/Jerusalem",
     "email": "alonbachar1@gmail.com",
     "enabled": true,
     "last_triggered": null

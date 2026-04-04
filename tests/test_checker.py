@@ -169,3 +169,34 @@ def test_save_alarms_writes_valid_json():
         assert data[0]["ticker"] == "GOOG"
     finally:
         os.unlink(path)
+
+
+def test_volume_sync_preserves_base_price(monkeypatch, tmp_path):
+    import json as _json
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    volume_path = data_dir / "alarms.json"
+
+    local_alarms = [{"id": "a1", "ticker": "WDC", "upper_pct": 5.0, "base_price": None, "last_triggered": None}]
+    volume_alarms = [{"id": "a1", "ticker": "WDC", "upper_pct": 5.0, "base_price": 280.0, "last_triggered": None}]
+
+    local_file = tmp_path / "alarms.json"
+    local_file.write_text(_json.dumps(local_alarms))
+    volume_path.write_text(_json.dumps(volume_alarms))
+
+    monkeypatch.setattr("checker.LOCAL_PATH", str(local_file))
+    monkeypatch.setattr("checker.VOLUME_PATH", str(volume_path))
+
+    import os
+    original_isdir = os.path.isdir
+    monkeypatch.setattr("os.path.isdir", lambda p: True if p == "/data" else original_isdir(p))
+    monkeypatch.setattr("checker.get_alarms_path.__globals__['os'].path.isdir", lambda p: True if p == "/data" else original_isdir(p), raising=False)
+
+    # Patch os.path.isdir inside checker module specifically
+    import checker
+    monkeypatch.setattr(checker.os.path, "isdir", lambda p: True if p == "/data" else original_isdir(p))
+
+    checker.get_alarms_path()
+
+    result = _json.loads(volume_path.read_text())
+    assert result[0]["base_price"] == 280.0
