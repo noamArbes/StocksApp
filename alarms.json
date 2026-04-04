@@ -1,12 +1,23 @@
-[
-  {
-    "id": "WDC_alarm",
-    "ticker": "WDC",
-    "upper_limit": 280.00,
-    "lower_limit": null,
-    "timezone": "Asia/Jerusalem",
-    "email": "alonbachar1@gmail.com",
-    "enabled": true,
-    "last_triggered": null
-  }
-]
+  [
+    {
+      "id": "WDC_alarm",
+      "ticker": "WDC",
+      "upper_limit": 280.00,
+      "lower_limit": null,
+      "timezone": "Asia/Jerusalem",
+      "email": ["alonbachar1@gmail.com", "noamarbes1@gmail.com"],
+      "enabled": true,
+      "last_triggered": null
+    },
+    {
+      "id": "WDC_pct_alarm",
+      "ticker": "WDC",
+      "upper_pct": 5.0,
+      "lower_pct": 5.0,
+      "base_price": null,
+      "timezone": "Asia/Jerusalem",
+      "email": ["alonbachar1@gmail.com", "noamarbes1@gmail.com"],
+      "enabled": true,
+      "last_triggered": null
+    }
+  ]
