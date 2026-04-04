@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="login-wrap">
-    <h1>🐕 StockAlarm</h1>
+    <h1>🔔 StockAlarm</h1>
     <form method="post" action="/login">
         {% if error %}<p class="error">{{ error }}</p>{% endif %}
         <input type="password" name="password" placeholder="Password" autofocus>
