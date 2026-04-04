@@ -19,10 +19,11 @@ app = Flask(__name__)
 app.secret_key = _SECRET_KEY
 
 _lock = threading.Lock()
+_ALARMS_PATH = checker.get_alarms_path()  # sync local→volume once at startup
 
 
 def _alarms_path():
-    return checker.get_alarms_path()
+    return _ALARMS_PATH
 
 
 def read_alarms():
