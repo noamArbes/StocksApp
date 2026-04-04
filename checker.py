@@ -33,6 +33,26 @@ def condition_met(alarm: dict, price: float) -> tuple:
     return False, None, None
 
 
+def condition_met_pct(alarm: dict, price: float) -> tuple:
+    """Returns (triggered: bool, direction: str | None, actual_pct: float | None).
+
+    Checks upper_pct and lower_pct thresholds against base_price.
+    Assumes base_price is already set (not None).
+    actual_pct is positive for price increases, negative for decreases.
+    """
+    base = alarm["base_price"]
+    actual_pct = (price - base) / base * 100
+
+    upper_pct = alarm.get("upper_pct")
+    lower_pct = alarm.get("lower_pct")
+
+    if upper_pct is not None and actual_pct >= upper_pct:
+        return True, "upper_pct", actual_pct
+    if lower_pct is not None and actual_pct <= -lower_pct:
+        return True, "lower_pct", actual_pct
+    return False, None, None
+
+
 def should_alert(alarm: dict) -> bool:
     """Returns True if enough time has passed since the last alert (or never alerted)."""
     last = alarm.get("last_triggered")

@@ -214,3 +214,56 @@ def test_format_body_falls_back_to_utc_on_invalid_timezone():
 def test_format_body_defaults_to_utc_when_no_timezone():
     body = format_body("AAPL", 231.50, "upper", 230.00)
     assert "UTC" in body
+
+
+from checker import condition_met_pct
+
+
+def test_pct_upper_triggered():
+    alarm = {"upper_pct": 5.0, "lower_pct": None, "base_price": 100.0}
+    triggered, direction, actual_pct = condition_met_pct(alarm, 106.0)
+    assert triggered is True
+    assert direction == "upper_pct"
+    assert abs(actual_pct - 6.0) < 0.01
+
+def test_pct_upper_not_triggered():
+    alarm = {"upper_pct": 5.0, "lower_pct": None, "base_price": 100.0}
+    triggered, _, _ = condition_met_pct(alarm, 104.0)
+    assert triggered is False
+
+def test_pct_upper_exactly_at_threshold():
+    alarm = {"upper_pct": 5.0, "lower_pct": None, "base_price": 100.0}
+    triggered, direction, _ = condition_met_pct(alarm, 105.0)
+    assert triggered is True
+    assert direction == "upper_pct"
+
+def test_pct_lower_triggered():
+    alarm = {"upper_pct": None, "lower_pct": 5.0, "base_price": 100.0}
+    triggered, direction, actual_pct = condition_met_pct(alarm, 94.0)
+    assert triggered is True
+    assert direction == "lower_pct"
+    assert actual_pct < 0
+
+def test_pct_lower_not_triggered():
+    alarm = {"upper_pct": None, "lower_pct": 5.0, "base_price": 100.0}
+    triggered, _, _ = condition_met_pct(alarm, 96.0)
+    assert triggered is False
+
+def test_pct_both_set_upper_triggered():
+    alarm = {"upper_pct": 5.0, "lower_pct": 5.0, "base_price": 100.0}
+    triggered, direction, _ = condition_met_pct(alarm, 110.0)
+    assert triggered is True
+    assert direction == "upper_pct"
+
+def test_pct_both_set_lower_triggered():
+    alarm = {"upper_pct": 5.0, "lower_pct": 5.0, "base_price": 100.0}
+    triggered, direction, _ = condition_met_pct(alarm, 90.0)
+    assert triggered is True
+    assert direction == "lower_pct"
+
+def test_pct_neither_triggered():
+    alarm = {"upper_pct": 5.0, "lower_pct": 5.0, "base_price": 100.0}
+    triggered, direction, actual_pct = condition_met_pct(alarm, 100.0)
+    assert triggered is False
+    assert direction is None
+    assert actual_pct is None
