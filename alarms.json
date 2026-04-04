@@ -9,6 +9,16 @@
       "enabled": true,
       "last_triggered": null
     },
+	  {
+      "id": "Apple_alarm",
+      "ticker": "AAPL",
+      "upper_limit": 250.00,
+      "lower_limit": null,
+      "timezone": "Asia/Jerusalem",
+      "email": ["alonbachar1@gmail.com", "noamarbes1@gmail.com"],
+      "enabled": true,
+      "last_triggered": null
+    },
     {
       "id": "WDC_pct_alarm",
       "ticker": "WDC",
