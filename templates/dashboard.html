@@ -42,7 +42,7 @@
         </div>
     </div>
     <div class="card-chart">
-        <canvas id="chart-{{ alarm.id }}" height="70"></canvas>
+        <canvas id="chart-{{ alarm.id }}" height="160"></canvas>
     </div>
     <div class="card-actions">
         <a href="/alarm/{{ alarm.id }}/edit" class="btn">Edit</a>
@@ -65,21 +65,75 @@ fetch('/alarm/{{ alarm.id }}/chart-data')
     .then(r => r.json())
     .then(data => {
         if (data.error) return;
+        const prices = data.prices;
+        const high = Math.max(...prices);
+        const low = Math.min(...prices);
         new Chart(document.getElementById('chart-{{ alarm.id }}'), {
             type: 'line',
             data: {
                 labels: data.labels,
-                datasets: [{
-                    data: data.prices,
-                    borderColor: '#4f8ef7',
-                    borderWidth: 1.5,
-                    pointRadius: 0,
-                    fill: false,
-                }]
+                datasets: [
+                    {
+                        label: 'Price',
+                        data: prices,
+                        borderColor: '#4f8ef7',
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.1,
+                    },
+                    {
+                        label: '30d High: $' + high.toFixed(2),
+                        data: prices.map(() => high),
+                        borderColor: '#22c55e',
+                        borderWidth: 1,
+                        borderDash: [6, 3],
+                        pointRadius: 0,
+                        fill: false,
+                    },
+                    {
+                        label: '30d Low: $' + low.toFixed(2),
+                        data: prices.map(() => low),
+                        borderColor: '#ef4444',
+                        borderWidth: 1,
+                        borderDash: [6, 3],
+                        pointRadius: 0,
+                        fill: false,
+                    },
+                ]
             },
             options: {
-                plugins: { legend: { display: false } },
-                scales: { x: { display: false }, y: { display: false } },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: { boxWidth: 12, font: { size: 11 } },
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        ticks: {
+                            maxTicksLimit: 5,
+                            maxRotation: 0,
+                            font: { size: 10 },
+                            callback: function(val, idx) {
+                                const label = this.getLabelForValue(val);
+                                return label ? label.slice(5) : '';
+                            }
+                        },
+                        grid: { display: false },
+                    },
+                    y: {
+                        display: true,
+                        ticks: {
+                            maxTicksLimit: 4,
+                            font: { size: 10 },
+                            callback: val => '$' + val.toFixed(0),
+                        },
+                        grid: { color: 'rgba(0,0,0,0.06)' },
+                    }
+                },
                 animation: false,
             }
         });
