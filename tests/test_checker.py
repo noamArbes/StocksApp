@@ -267,3 +267,40 @@ def test_pct_neither_triggered():
     assert triggered is False
     assert direction is None
     assert actual_pct is None
+
+
+from checker import format_subject_pct, format_body_pct
+
+def test_format_subject_pct_upper():
+    subject = format_subject_pct("WDC", 106.0, "upper_pct", 5.0, 6.0)
+    assert "WDC" in subject
+    assert "+6.0%" in subject or "+6.00%" in subject
+
+def test_format_subject_pct_lower():
+    subject = format_subject_pct("WDC", 94.0, "lower_pct", 5.0, -6.0)
+    assert "WDC" in subject
+    assert "-6.0%" in subject or "-6.00%" in subject
+
+def test_format_body_pct_contains_ticker():
+    body = format_body_pct("WDC", 106.0, "upper_pct", 5.0, 100.0, 6.0)
+    assert "WDC" in body
+
+def test_format_body_pct_contains_current_price():
+    body = format_body_pct("WDC", 106.0, "upper_pct", 5.0, 100.0, 6.0)
+    assert "$106.00" in body
+
+def test_format_body_pct_contains_base_price():
+    body = format_body_pct("WDC", 106.0, "upper_pct", 5.0, 100.0, 6.0)
+    assert "$100.00" in body
+
+def test_format_body_pct_contains_pct_change():
+    body = format_body_pct("WDC", 106.0, "upper_pct", 5.0, 100.0, 6.0)
+    assert "+6" in body
+
+def test_format_body_pct_lower_shows_fallen():
+    body = format_body_pct("WDC", 94.0, "lower_pct", 5.0, 100.0, -6.0)
+    assert "fallen" in body.lower() or "-6" in body
+
+def test_format_body_pct_with_timezone():
+    body = format_body_pct("WDC", 106.0, "upper_pct", 5.0, 100.0, 6.0, tz_name="Asia/Jerusalem")
+    assert "IST" in body or "IDT" in body or "+03" in body or "+02" in body

@@ -78,6 +78,27 @@ def format_body(ticker: str, price: float, limit_type: str, limit_value: float, 
     )
 
 
+def format_subject_pct(ticker: str, price: float, direction: str, pct_threshold: float, actual_pct: float) -> str:
+    sign = "+" if actual_pct >= 0 else ""
+    return f"Stock Alert: {ticker} moved {sign}{actual_pct:.1f}% (threshold: {pct_threshold:.1f}%)"
+
+
+def format_body_pct(ticker: str, price: float, direction: str, pct_threshold: float, base_price: float, actual_pct: float, tz_name: str | None = None) -> str:
+    now = _local_time_str(tz_name)
+    sign = "+" if actual_pct >= 0 else ""
+    direction_label = "risen" if direction == "upper_pct" else "fallen"
+    return (
+        f"Stock Alert\n\n"
+        f"Ticker: {ticker}\n"
+        f"Current Price: ${price:.2f}\n"
+        f"Base Price: ${base_price:.2f}\n"
+        f"Change: {sign}{actual_pct:.2f}% ({direction_label})\n"
+        f"Threshold: {pct_threshold:.1f}%\n"
+        f"Time: {now}\n\n"
+        f"To disable this alarm, set \"enabled\": false in alarms.json and push to GitHub."
+    )
+
+
 VOLUME_PATH = "/data/alarms.json"
 LOCAL_PATH = "alarms.json"
 
