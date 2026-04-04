@@ -1,11 +1,11 @@
 [
   {
-    "id": "example_alarm",
-    "ticker": "AAPL",
-    "upper_limit": 230.00,
-    "lower_limit": 180.00,
-    "email": "you@gmail.com",
-    "enabled": false,
+    "id": "WDC_alarm",
+    "ticker": "WDC",
+    "upper_limit": 280.00,
+    "lower_limit": null,
+    "email": "alonbachar1@gmail.com",
+    "enabled": true,
     "last_triggered": null
   }
 ]
