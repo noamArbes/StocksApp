@@ -37,6 +37,15 @@ def write_alarms(alarms):
         checker.save_alarms(alarms, path)
 
 
+def modify_alarms(fn):
+    """Read alarms, apply fn(alarms), write back — all under a single lock."""
+    with _lock:
+        path = _alarms_path()
+        alarms = checker.load_alarms(path)
+        fn(alarms)
+        checker.save_alarms(alarms, path)
+
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -95,9 +104,9 @@ def alarm_new():
         alarm, error = _alarm_from_form(request.form)
         if error:
             return render_template("alarm_form.html", error=error, form=request.form, title="Add Alarm")
-        alarms = read_alarms()
-        alarms.append(alarm)
-        write_alarms(alarms)
+        def do_append(alarms):
+            alarms.append(alarm)
+        modify_alarms(do_append)
         return redirect(url_for("dashboard"))
     return render_template("alarm_form.html", form={}, title="Add Alarm")
 
@@ -113,11 +122,12 @@ def alarm_edit(alarm_id):
         updated, error = _alarm_from_form(request.form, existing=alarm)
         if error:
             return render_template("alarm_form.html", error=error, form=request.form, alarm=alarm, title="Edit Alarm")
-        for i, a in enumerate(alarms):
-            if a.get("id") == alarm_id:
-                alarms[i] = updated
-                break
-        write_alarms(alarms)
+        def do_update(alarms):
+            for i, a in enumerate(alarms):
+                if a.get("id") == alarm_id:
+                    alarms[i] = updated
+                    break
+        modify_alarms(do_update)
         return redirect(url_for("dashboard"))
     form_data = dict(alarm)
     if isinstance(form_data.get("email"), list):
@@ -128,21 +138,21 @@ def alarm_edit(alarm_id):
 @app.route("/alarm/<alarm_id>/delete", methods=["POST"])
 @login_required
 def alarm_delete(alarm_id):
-    alarms = read_alarms()
-    alarms = [a for a in alarms if a.get("id") != alarm_id]
-    write_alarms(alarms)
+    def do_delete(alarms):
+        alarms[:] = [a for a in alarms if a.get("id") != alarm_id]
+    modify_alarms(do_delete)
     return redirect(url_for("dashboard"))
 
 
 @app.route("/alarm/<alarm_id>/toggle", methods=["POST"])
 @login_required
 def alarm_toggle(alarm_id):
-    alarms = read_alarms()
-    for alarm in alarms:
-        if alarm.get("id") == alarm_id:
-            alarm["enabled"] = not alarm.get("enabled", False)
-            break
-    write_alarms(alarms)
+    def do_toggle(alarms):
+        for alarm in alarms:
+            if alarm.get("id") == alarm_id:
+                alarm["enabled"] = not alarm.get("enabled", False)
+                break
+    modify_alarms(do_toggle)
     return redirect(url_for("dashboard"))
 
 
@@ -163,7 +173,8 @@ def chart_data(alarm_id):
         prices = [round(float(p), 2) for p in hist["Close"]]
         return jsonify({"labels": labels, "prices": prices})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        app.logger.error(f"Chart data fetch failed for {ticker}: {e}")
+        return jsonify({"error": "Could not fetch chart data"}), 500
 
 
 # --- Form helper ---
