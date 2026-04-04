@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Login</title></head>
+<body>
+<form method="post" action="/login">
+    {% if error %}<p>{{ error }}</p>{% endif %}
+    <input type="password" name="password" placeholder="Password">
+    <button type="submit">Sign in</button>
+</form>
+</body>
+</html>

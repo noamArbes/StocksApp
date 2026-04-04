@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>{{ title }}</title></head>
+<body>
+{% if error %}<p>{{ error }}</p>{% endif %}
+<form method="post">
+    <input type="text" name="ticker" value="{{ form.get('ticker', '') }}">
+    <input type="radio" name="alarm_type" value="price" checked> Price
+    <input type="radio" name="alarm_type" value="pct"> Percentage
+    <input type="number" name="upper_limit" value="{{ form.get('upper_limit', '') }}">
+    <input type="number" name="lower_limit" value="{{ form.get('lower_limit', '') }}">
+    <input type="number" name="upper_pct" value="{{ form.get('upper_pct', '') }}">
+    <input type="number" name="lower_pct" value="{{ form.get('lower_pct', '') }}">
+    <input type="text" name="email" value="{{ form.get('email', '') }}">
+    <input type="text" name="timezone" value="{{ form.get('timezone') or '' }}">
+    <input type="checkbox" name="enabled" {% if form.get('enabled', True) %}checked{% endif %}>
+    <button type="submit">Save</button>
+</form>
+</body>
+</html>
