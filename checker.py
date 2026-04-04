@@ -76,8 +76,8 @@ def get_alarms_path() -> str:
                             # Only restore base_price if local doesn't explicitly reset it
                             if alarm.get("base_price") is None and vol.get("base_price") is not None:
                                 alarm["base_price"] = vol["base_price"]
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"[WARN] Could not read volume alarms file, using local: {e}")
             save_alarms(local_alarms, volume_path)
         return volume_path
     return LOCAL_PATH
