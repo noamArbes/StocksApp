@@ -110,7 +110,8 @@ def send_email(subject: str, body: str, to: str, sender: str, password: str) -> 
     msg["From"] = sender
     msg["To"] = to
 
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as server:
+    with smtplib.SMTP("smtp.gmail.com", 587, timeout=30) as server:
+        server.starttls()
         server.login(sender, password)
         server.send_message(msg)
 
