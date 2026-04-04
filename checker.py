@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import tempfile
+import urllib.error
 import urllib.request
 
 import yfinance as yf
@@ -102,32 +103,36 @@ def get_price(ticker: str) -> float:
     return float(price)
 
 
-def send_email(subject: str, body: str, to: str, api_key: str) -> None:
-    """Sends an email via Resend API."""
+def send_email(subject: str, body: str, to: str, api_key: str, sender: str) -> None:
+    """Sends an email via Brevo API."""
     data = json.dumps({
-        "from": "StocksApp <onboarding@resend.dev>",
-        "to": [to],
+        "sender": {"name": "StocksApp", "email": sender},
+        "to": [{"email": to}],
         "subject": subject,
-        "text": body,
+        "textContent": body,
     }).encode()
     req = urllib.request.Request(
-        "https://api.resend.com/emails",
+        "https://api.brevo.com/v3/smtp/email",
         data=data,
         headers={
-            "Authorization": f"Bearer {api_key}",
+            "api-key": api_key,
             "Content-Type": "application/json",
         },
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        resp.read()
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            resp.read()
+    except urllib.error.HTTPError as e:
+        raise Exception(f"HTTP {e.code}: {e.read().decode()}") from e
 
 
 def run() -> None:
-    api_key = os.environ.get("RESEND_API_KEY")
+    api_key = os.environ.get("BREVO_API_KEY")
+    sender = os.environ.get("BREVO_SENDER_EMAIL")
 
-    if not api_key:
+    if not api_key or not sender:
         raise EnvironmentError(
-            "Missing required environment variable: RESEND_API_KEY"
+            "Missing required environment variables: BREVO_API_KEY and BREVO_SENDER_EMAIL"
         )
 
     path = get_alarms_path()
@@ -159,7 +164,7 @@ def run() -> None:
                 subject = format_subject(ticker, price, limit_type, limit_value)
                 body = format_body(ticker, price, limit_type, limit_value)
                 try:
-                    send_email(subject, body, alarm["email"], api_key)
+                    send_email(subject, body, alarm["email"], api_key, sender)
                     alarm["last_triggered"] = datetime.now(timezone.utc).isoformat()
                     changed = True
                     print(f"[ALERT] Email sent for {ticker} at ${price:.2f}")
