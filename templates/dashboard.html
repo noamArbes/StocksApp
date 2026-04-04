@@ -1,10 +1,90 @@
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><title>Dashboard</title></head>
-<body>
-<a href="/alarm/new">Add Alarm</a>
+{% extends "base.html" %}
+{% block content %}
+<div class="toolbar">
+    <h2>Alarms</h2>
+    <a href="{{ url_for('alarm_new') }}" class="btn btn-primary">+ Add</a>
+</div>
+
 {% for alarm in alarms %}
-<div>{{ alarm.ticker }}</div>
+<div class="card {% if not alarm.enabled %}card-disabled{% endif %}">
+    <div class="card-header">
+        <span class="ticker">{{ alarm.ticker }}</span>
+        <form method="post" action="/alarm/{{ alarm.id }}/toggle" style="display:inline">
+            <button type="submit" class="toggle {{ 'toggle-on' if alarm.enabled else 'toggle-off' }}">
+                {{ "ON" if alarm.enabled else "OFF" }}
+            </button>
+        </form>
+    </div>
+    <div class="card-body">
+        <div class="condition">
+            {% if alarm.get('upper_pct') or alarm.get('lower_pct') %}
+                {% if alarm.get('upper_pct') and alarm.get('lower_pct') %}
+                    ↑{{ alarm.upper_pct }}% / ↓{{ alarm.lower_pct }}%
+                {% elif alarm.get('upper_pct') %}
+                    ↑ {{ alarm.upper_pct }}%
+                {% else %}
+                    ↓ {{ alarm.lower_pct }}%
+                {% endif %}
+            {% else %}
+                {% if alarm.get('upper_limit') %}↑ ${{ "%.2f"|format(alarm.upper_limit) }}{% endif %}
+                {% if alarm.get('lower_limit') %}↓ ${{ "%.2f"|format(alarm.lower_limit) }}{% endif %}
+            {% endif %}
+        </div>
+        <div class="price">
+            {% if prices.get(alarm.ticker) is not none %}
+                ${{ "%.2f"|format(prices[alarm.ticker]) }}
+            {% else %}
+                unavailable
+            {% endif %}
+        </div>
+        <div class="last-triggered">
+            Last alert: {{ alarm.last_triggered[:10] if alarm.last_triggered else "Never" }}
+        </div>
+    </div>
+    <div class="card-chart">
+        <canvas id="chart-{{ alarm.id }}" height="70"></canvas>
+    </div>
+    <div class="card-actions">
+        <a href="/alarm/{{ alarm.id }}/edit" class="btn">Edit</a>
+        <form method="post" action="/alarm/{{ alarm.id }}/delete" style="display:inline"
+              onsubmit="return confirm('Delete {{ alarm.ticker }} alarm?')">
+            <button type="submit" class="btn btn-danger">Delete</button>
+        </form>
+    </div>
+</div>
+{% else %}
+<p class="empty">No alarms yet. <a href="{{ url_for('alarm_new') }}">Add one</a>.</p>
 {% endfor %}
-</body>
-</html>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+{% for alarm in alarms %}
+fetch('/alarm/{{ alarm.id }}/chart-data')
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) return;
+        new Chart(document.getElementById('chart-{{ alarm.id }}'), {
+            type: 'line',
+            data: {
+                labels: data.labels,
+                datasets: [{
+                    data: data.prices,
+                    borderColor: '#4f8ef7',
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    fill: false,
+                }]
+            },
+            options: {
+                plugins: { legend: { display: false } },
+                scales: { x: { display: false }, y: { display: false } },
+                animation: false,
+            }
+        });
+    })
+    .catch(() => {});
+{% endfor %}
+</script>
+{% endblock %}

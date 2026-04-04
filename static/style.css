@@ -1,0 +1,132 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f5f5f5;
+    color: #222;
+}
+
+.nav {
+    background: #1a1a2e;
+    color: white;
+    padding: 1rem 1.25rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.nav-title { font-weight: 700; font-size: 1.1rem; }
+.nav-link { color: #aaa; text-decoration: none; font-size: 0.9rem; }
+
+.container { max-width: 600px; margin: 0 auto; padding: 1rem 1.25rem; }
+
+.login-wrap {
+    max-width: 320px;
+    margin: 4rem auto;
+    background: white;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+}
+.login-wrap h1 { margin-bottom: 1.5rem; font-size: 1.5rem; text-align: center; }
+.login-wrap input[type=password] {
+    width: 100%; padding: 0.75rem;
+    border: 1px solid #ddd; border-radius: 8px;
+    font-size: 1rem; margin-bottom: 1rem;
+}
+.login-wrap button {
+    width: 100%; padding: 0.75rem;
+    background: #4f8ef7; color: white;
+    border: none; border-radius: 8px;
+    font-size: 1rem; cursor: pointer;
+}
+
+.error { color: #e53e3e; margin-bottom: 1rem; font-size: 0.9rem; }
+
+.toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+.toolbar h2 { font-size: 1.2rem; }
+
+.card {
+    background: white;
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+.card-disabled { opacity: 0.55; }
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+.ticker { font-size: 1.1rem; font-weight: 700; }
+
+.toggle {
+    padding: 0.3rem 0.8rem;
+    border: none; border-radius: 20px;
+    cursor: pointer; font-size: 0.8rem; font-weight: 600;
+}
+.toggle-on  { background: #c6f6d5; color: #276749; }
+.toggle-off { background: #fed7d7; color: #9b2c2c; }
+
+.card-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.4rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+}
+.price { font-size: 1.05rem; font-weight: 600; color: #4f8ef7; text-align: right; }
+.condition { color: #555; }
+.last-triggered { color: #888; font-size: 0.8rem; grid-column: 1 / -1; }
+
+.card-chart { margin-bottom: 0.75rem; }
+
+.card-actions { display: flex; gap: 0.5rem; }
+
+.btn {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    background: #eee;
+    border: none; border-radius: 8px;
+    cursor: pointer;
+    text-decoration: none;
+    font-size: 0.9rem;
+    color: #333;
+}
+.btn-primary { background: #4f8ef7; color: white; }
+.btn-danger  { background: #fed7d7; color: #9b2c2c; }
+
+.empty { text-align: center; color: #888; margin-top: 2rem; }
+
+.form-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+.form-card h2 { margin-bottom: 1.25rem; }
+form label {
+    display: block;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    color: #555;
+}
+form input[type=text],
+form input[type=number],
+form input[type=password] {
+    display: block; width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #ddd; border-radius: 8px;
+    font-size: 1rem; margin-top: 0.25rem;
+}
+.radio-group { display: flex; gap: 1.5rem; margin-bottom: 1rem; }
+.radio-group label { color: #333; display: flex; align-items: center; gap: 0.4rem; }
+.checkbox-label { display: flex; align-items: center; gap: 0.5rem; color: #333 !important; }
+.checkbox-label input { width: auto; }
+.form-actions { display: flex; gap: 0.75rem; margin-top: 1.5rem; }
