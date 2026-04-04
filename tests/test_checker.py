@@ -200,3 +200,17 @@ def test_volume_sync_preserves_base_price(monkeypatch, tmp_path):
 
     result = _json.loads(volume_path.read_text())
     assert result[0]["base_price"] == 280.0
+
+
+def test_format_body_shows_local_timezone():
+    body = format_body("AAPL", 231.50, "upper", 230.00, tz_name="Asia/Jerusalem")
+    # Jerusalem is UTC+2 or UTC+3 — IST or IDT should appear
+    assert "IST" in body or "IDT" in body or "+03" in body or "+02" in body
+
+def test_format_body_falls_back_to_utc_on_invalid_timezone():
+    body = format_body("AAPL", 231.50, "upper", 230.00, tz_name="Invalid/Zone")
+    assert "UTC" in body
+
+def test_format_body_defaults_to_utc_when_no_timezone():
+    body = format_body("AAPL", 231.50, "upper", 230.00)
+    assert "UTC" in body

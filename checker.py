@@ -1,4 +1,5 @@
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import json
 import os
 import shutil
@@ -7,6 +8,17 @@ import urllib.error
 import urllib.request
 
 import yfinance as yf
+
+
+def _local_time_str(tz_name: str | None) -> str:
+    """Returns current time formatted for the given timezone. Falls back to UTC if invalid."""
+    if tz_name:
+        try:
+            tz = ZoneInfo(tz_name)
+            return datetime.now(tz).strftime("%Y-%m-%d %H:%M %Z")
+        except ZoneInfoNotFoundError:
+            print(f"[WARN] Invalid timezone '{tz_name}', defaulting to UTC")
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
 
 def condition_met(alarm: dict, price: float) -> tuple:
@@ -34,8 +46,8 @@ def format_subject(ticker: str, price: float, limit_type: str, limit_value: floa
     return f"Stock Alert: {ticker} hit ${price:.2f} ({limit_type} limit: ${limit_value:.2f})"
 
 
-def format_body(ticker: str, price: float, limit_type: str, limit_value: float) -> str:
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+def format_body(ticker: str, price: float, limit_type: str, limit_value: float, tz_name: str | None = None) -> str:
+    now = _local_time_str(tz_name)
     return (
         f"Stock Alert\n\n"
         f"Ticker: {ticker}\n"
@@ -165,7 +177,7 @@ def run() -> None:
         if triggered:
             if should_alert(alarm):
                 subject = format_subject(ticker, price, limit_type, limit_value)
-                body = format_body(ticker, price, limit_type, limit_value)
+                body = format_body(ticker, price, limit_type, limit_value, tz_name=alarm.get("timezone"))
                 try:
                     send_email(subject, body, alarm["email"], api_key, sender)
                     alarm["last_triggered"] = datetime.now(timezone.utc).isoformat()
