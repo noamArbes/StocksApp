@@ -213,28 +213,67 @@ def run() -> None:
             print(f"[ERROR] Could not fetch price for {ticker}: {e}")
             continue
 
-        triggered, limit_type, limit_value = condition_met(alarm, price)
+        is_pct_alarm = alarm.get("upper_pct") is not None or alarm.get("lower_pct") is not None
+        tz_name = alarm.get("timezone")
 
-        if triggered:
-            if should_alert(alarm):
-                subject = format_subject(ticker, price, limit_type, limit_value)
-                body = format_body(ticker, price, limit_type, limit_value, tz_name=alarm.get("timezone"))
-                try:
-                    send_email(subject, body, alarm["email"], api_key, sender)
-                    alarm["last_triggered"] = datetime.now(timezone.utc).isoformat()
-                    changed = True
-                    print(f"[ALERT] Email sent for {ticker} at ${price:.2f}")
-                except KeyError:
-                    print(f"[ERROR] Alarm {ticker} is missing required field 'email', skipping")
-                except Exception as e:
-                    print(f"[ERROR] Could not send email for {ticker}: {e}")
-            else:
-                print(f"[SKIP] {ticker} condition met but alert sent recently, skipping")
-        else:
-            if alarm.get("last_triggered") is not None:
-                alarm["last_triggered"] = None
+        if is_pct_alarm:
+            if alarm.get("base_price") is None:
+                alarm["base_price"] = price
                 changed = True
-            print(f"[OK] {ticker}: ${price:.2f} — no condition met")
+                print(f"[BASE] {ticker}: base price set to ${price:.2f}")
+                continue
+
+            triggered, direction, actual_pct = condition_met_pct(alarm, price)
+
+            if triggered:
+                if should_alert(alarm):
+                    pct_threshold = alarm.get("upper_pct") if direction == "upper_pct" else alarm.get("lower_pct")
+                    subject = format_subject_pct(ticker, price, direction, pct_threshold, actual_pct)
+                    body = format_body_pct(ticker, price, direction, pct_threshold, alarm["base_price"], actual_pct, tz_name=tz_name)
+                    try:
+                        send_email(subject, body, alarm["email"], api_key, sender)
+                        alarm["last_triggered"] = datetime.now(timezone.utc).isoformat()
+                        changed = True
+                        print(f"[ALERT] Email sent for {ticker} at {actual_pct:+.1f}%")
+                    except KeyError:
+                        print(f"[ERROR] Alarm {ticker} is missing required field 'email', skipping")
+                    except Exception as e:
+                        print(f"[ERROR] Could not send email for {ticker}: {e}")
+                else:
+                    print(f"[SKIP] {ticker} condition met but alert sent recently, skipping")
+            else:
+                if alarm.get("last_triggered") is not None:
+                    alarm["last_triggered"] = None
+                    changed = True
+                print(f"[OK] {ticker}: ${price:.2f} ({actual_pct:+.1f}% from base ${alarm['base_price']:.2f})")
+
+        else:
+            if not alarm.get("upper_limit") and not alarm.get("lower_limit"):
+                print(f"[SKIP] {alarm.get('id', ticker)}: no condition defined")
+                continue
+
+            triggered, limit_type, limit_value = condition_met(alarm, price)
+
+            if triggered:
+                if should_alert(alarm):
+                    subject = format_subject(ticker, price, limit_type, limit_value)
+                    body = format_body(ticker, price, limit_type, limit_value, tz_name=tz_name)
+                    try:
+                        send_email(subject, body, alarm["email"], api_key, sender)
+                        alarm["last_triggered"] = datetime.now(timezone.utc).isoformat()
+                        changed = True
+                        print(f"[ALERT] Email sent for {ticker} at ${price:.2f}")
+                    except KeyError:
+                        print(f"[ERROR] Alarm {ticker} is missing required field 'email', skipping")
+                    except Exception as e:
+                        print(f"[ERROR] Could not send email for {ticker}: {e}")
+                else:
+                    print(f"[SKIP] {ticker} condition met but alert sent recently, skipping")
+            else:
+                if alarm.get("last_triggered") is not None:
+                    alarm["last_triggered"] = None
+                    changed = True
+                print(f"[OK] {ticker}: ${price:.2f} — no condition met")
 
     if changed:
         save_alarms(alarms, path)
