@@ -159,11 +159,12 @@ def get_price(ticker: str) -> float:
     return float(price)
 
 
-def send_email(subject: str, body: str, to: str, api_key: str, sender: str) -> None:
-    """Sends an email via Brevo API."""
+def send_email(subject: str, body: str, to: str | list, api_key: str, sender: str) -> None:
+    """Sends an email via Brevo API. `to` can be a single address or a list."""
+    recipients = to if isinstance(to, list) else [to]
     data = json.dumps({
         "sender": {"name": "StocksApp", "email": sender},
-        "to": [{"email": to}],
+        "to": [{"email": addr} for addr in recipients],
         "subject": subject,
         "textContent": body,
     }).encode()
