@@ -50,7 +50,7 @@ def condition_met_pct(alarm: dict, price: float) -> tuple:
         return True, "upper_pct", actual_pct
     if lower_pct is not None and actual_pct <= -lower_pct:
         return True, "lower_pct", actual_pct
-    return False, None, None
+    return False, None, actual_pct
 
 
 def should_alert(alarm: dict) -> bool:
