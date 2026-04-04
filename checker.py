@@ -2,9 +2,8 @@ from datetime import datetime, timezone, timedelta
 import json
 import os
 import shutil
-import smtplib
 import tempfile
-from email.mime.text import MIMEText
+import urllib.request
 
 import yfinance as yf
 
@@ -103,26 +102,32 @@ def get_price(ticker: str) -> float:
     return float(price)
 
 
-def send_email(subject: str, body: str, to: str, sender: str, password: str) -> None:
-    """Sends an email via Gmail SMTP SSL."""
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = sender
-    msg["To"] = to
-
-    with smtplib.SMTP("smtp.gmail.com", 587, timeout=30) as server:
-        server.starttls()
-        server.login(sender, password)
-        server.send_message(msg)
+def send_email(subject: str, body: str, to: str, api_key: str) -> None:
+    """Sends an email via Resend API."""
+    data = json.dumps({
+        "from": "StocksApp <onboarding@resend.dev>",
+        "to": [to],
+        "subject": subject,
+        "text": body,
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=data,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        resp.read()
 
 
 def run() -> None:
-    sender = os.environ.get("GMAIL_SENDER")
-    password = os.environ.get("GMAIL_APP_PASSWORD")
+    api_key = os.environ.get("RESEND_API_KEY")
 
-    if not sender or not password:
+    if not api_key:
         raise EnvironmentError(
-            "Missing required environment variables: GMAIL_SENDER and GMAIL_APP_PASSWORD"
+            "Missing required environment variable: RESEND_API_KEY"
         )
 
     path = get_alarms_path()
@@ -154,7 +159,7 @@ def run() -> None:
                 subject = format_subject(ticker, price, limit_type, limit_value)
                 body = format_body(ticker, price, limit_type, limit_value)
                 try:
-                    send_email(subject, body, alarm["email"], sender, password)
+                    send_email(subject, body, alarm["email"], api_key)
                     alarm["last_triggered"] = datetime.now(timezone.utc).isoformat()
                     changed = True
                     print(f"[ALERT] Email sent for {ticker} at ${price:.2f}")
