@@ -52,12 +52,30 @@ LOCAL_PATH = "alarms.json"
 
 def get_alarms_path() -> str:
     """Returns the path to alarms.json — volume path on Railway, local path otherwise.
-    Copies the local template to the volume on first deploy."""
+    On each deploy, syncs alarm config from the local file while preserving last_triggered."""
     data_dir = "/data"
     if os.path.isdir(data_dir):
         volume_path = os.path.join(data_dir, "alarms.json")
-        if not os.path.exists(volume_path) and os.path.exists(LOCAL_PATH):
-            shutil.copy(LOCAL_PATH, volume_path)
+        if os.path.exists(LOCAL_PATH):
+            with open(LOCAL_PATH) as f:
+                local_alarms = json.load(f)
+            # Preserve last_triggered from volume if it exists
+            if os.path.exists(volume_path):
+                try:
+                    with open(volume_path) as f:
+                        volume_alarms = json.load(f)
+                    last_triggered_by_id = {
+                        a["id"]: a.get("last_triggered")
+                        for a in volume_alarms
+                        if "id" in a
+                    }
+                    for alarm in local_alarms:
+                        alarm_id = alarm.get("id")
+                        if alarm_id in last_triggered_by_id:
+                            alarm["last_triggered"] = last_triggered_by_id[alarm_id]
+                except Exception:
+                    pass  # If volume file is corrupt, just use local
+            save_alarms(local_alarms, volume_path)
         return volume_path
     return LOCAL_PATH
 
