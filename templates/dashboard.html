@@ -109,6 +109,9 @@ function _renderChart(alarmId, period) {
             const prices = data.prices;
             const high = Math.max(...prices);
             const low = Math.min(...prices);
+            const firstPrice = prices[0];
+            const pctMin = (low - firstPrice) / firstPrice * 100;
+            const pctMax = (high - firstPrice) / firstPrice * 100;
             if (_charts[alarmId]) { _charts[alarmId].destroy(); }
             _charts[alarmId] = new Chart(document.getElementById('chart-' + alarmId), {
                 type: 'line',
@@ -169,6 +172,8 @@ function _renderChart(alarmId, period) {
                         },
                         y: {
                             display: true,
+                            min: low,
+                            max: high,
                             ticks: {
                                 maxTicksLimit: 4,
                                 font: { size: 10 },
@@ -176,6 +181,19 @@ function _renderChart(alarmId, period) {
                                 callback: val => '$' + val.toFixed(0),
                             },
                             grid: { color: 'rgba(255,255,255,0.07)' },
+                        },
+                        y2: {
+                            display: true,
+                            position: 'right',
+                            min: pctMin,
+                            max: pctMax,
+                            ticks: {
+                                maxTicksLimit: 4,
+                                font: { size: 10 },
+                                color: '#c8a07a',
+                                callback: val => (val >= 0 ? '+' : '') + val.toFixed(1) + '%',
+                            },
+                            grid: { display: false },
                         }
                     },
                     animation: false,
