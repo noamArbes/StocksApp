@@ -59,7 +59,8 @@ def should_alert(alarm: dict) -> bool:
     if last is None:
         return True
     last_dt = datetime.fromisoformat(last)
-    return datetime.now(timezone.utc) - last_dt >= timedelta(days=3)
+    snooze_hours = alarm.get("snooze_hours", 72)
+    return datetime.now(timezone.utc) - last_dt >= timedelta(hours=snooze_hours)
 
 
 def format_subject(ticker: str, price: float, limit_type: str, limit_value: float) -> str:

@@ -14,10 +14,19 @@
        class="btn {% if sort == 'az' %}btn-primary{% endif %}">A–Z</a>
 </div>
 
+<div class="search-bar">
+    <input type="text" id="alarm-search" placeholder="Filter by ticker…" autocomplete="off">
+</div>
+
 {% for alarm in alarms %}
-<div class="card {% if not alarm.enabled %}card-disabled{% endif %}">
+{% set is_triggered = triggered.get(alarm.id, false) %}
+<div class="card {% if not alarm.enabled %}card-disabled{% endif %} {% if is_triggered %}card-triggered{% endif %}"
+     data-ticker="{{ alarm.ticker }}">
     <div class="card-header">
-        <span class="ticker">{{ alarm.ticker }}</span>
+        <span class="ticker">
+            {{ alarm.ticker }}
+            {% if is_triggered %}<span class="triggered-badge">FIRING</span>{% endif %}
+        </span>
         <form method="post" action="/alarm/{{ alarm.id }}/toggle" style="display:inline">
             <button type="submit" class="toggle {{ 'toggle-on' if alarm.enabled else 'toggle-off' }}">
                 {{ "ON" if alarm.enabled else "OFF" }}
@@ -39,13 +48,25 @@
                 {% if alarm.get('lower_limit') %}↓ ${{ "%.2f"|format(alarm.lower_limit) }}{% endif %}
             {% endif %}
         </div>
-        <div class="price">
-            {% if prices.get(alarm.ticker) is not none %}
-                ${{ "%.2f"|format(prices[alarm.ticker]) }}
-            {% else %}
-                unavailable
+        <div class="price-col">
+            <div class="price">
+                {% if prices.get(alarm.ticker) is not none %}
+                    ${{ "%.2f"|format(prices[alarm.ticker]) }}
+                {% else %}
+                    unavailable
+                {% endif %}
+            </div>
+            {% set pc = price_changes.get(alarm.id) %}
+            {% if pc is not none %}
+            <div class="price-change {% if pc >= 0 %}price-change-up{% else %}price-change-down{% endif %}">
+                {{ "%+.1f"|format(pc) }}% since created
+            </div>
             {% endif %}
         </div>
+        {% set dist = distances.get(alarm.id) %}
+        {% if dist %}
+        <div class="distance {% if is_triggered %}distance-triggered{% endif %}">{{ dist }}</div>
+        {% endif %}
         <div class="last-triggered">
             Last alert: {{ alarm.last_triggered[:10] if alarm.last_triggered else "Never" }}
         </div>
@@ -53,11 +74,17 @@
             Created: {% if alarm.get('created_at') %}{{ alarm.created_at[:10] }}{% else %}N/A{% endif %}
             &middot;
             Initial: {% if alarm.get('initial_price') is not none %}${{ "%.2f"|format(alarm.initial_price) }}{% else %}N/A{% endif %}
+            &middot;
+            Cooldown: {% set sh = alarm.get('snooze_hours', 72) %}
+            {% if sh < 24 %}{{ sh }}h{% elif sh == 24 %}1 day{% elif sh == 72 %}3 days{% elif sh == 168 %}1 week{% else %}{{ sh }}h{% endif %}
         </div>
     </div>
+    {% if alarm.get('notes') %}
+    <div class="card-notes">{{ alarm.notes }}</div>
+    {% endif %}
     <div class="chart-controls">
-        <button class="btn chart-period-btn active" data-period="1mo" data-alarm="{{ alarm.id }}">1M</button>
-        <button class="btn chart-period-btn" data-period="5d" data-alarm="{{ alarm.id }}">1W</button>
+        <button class="btn chart-period-btn active" data-period="5d" data-alarm="{{ alarm.id }}">1W</button>
+        <button class="btn chart-period-btn" data-period="1mo" data-alarm="{{ alarm.id }}">1M</button>
         <button class="btn chart-period-btn" data-period="1y" data-alarm="{{ alarm.id }}">1Y</button>
     </div>
     <div class="card-chart">
@@ -84,6 +111,9 @@
     </details>
     <div class="card-actions">
         <a href="/alarm/{{ alarm.id }}/edit" class="btn">Edit</a>
+        <form method="post" action="/alarm/{{ alarm.id }}/duplicate" style="display:inline">
+            <button type="submit" class="btn">Copy</button>
+        </form>
         <form method="post" action="/alarm/{{ alarm.id }}/delete" style="display:inline"
               onsubmit="return confirm('Delete {{ alarm.ticker }} alarm?')">
             <button type="submit" class="btn btn-danger">Delete</button>
@@ -101,7 +131,7 @@
 const _charts = {};
 
 function _renderChart(alarmId, period) {
-    const periodLabel = {'5d': '1W', '1mo': '1M', '1y': '1Y'}[period] || '1M';
+    const periodLabel = {'5d': '1W', '1mo': '1M', '1y': '1Y'}[period] || '1W';
     fetch('/alarm/' + alarmId + '/chart-data?period=' + period)
         .then(r => r.json())
         .then(data => {
@@ -211,7 +241,7 @@ function _renderChart(alarmId, period) {
 }
 
 {% for alarm in alarms %}
-_renderChart('{{ alarm.id }}', '1mo');
+_renderChart('{{ alarm.id }}', '5d');
 {% endfor %}
 
 document.querySelectorAll('.chart-period-btn').forEach(btn => {
@@ -222,6 +252,15 @@ document.querySelectorAll('.chart-period-btn').forEach(btn => {
             .forEach(b => b.classList.remove('active'));
         this.classList.add('active');
         _renderChart(alarmId, period);
+    });
+});
+
+// Ticker search filter
+document.getElementById('alarm-search').addEventListener('input', function() {
+    const q = this.value.trim().toLowerCase();
+    document.querySelectorAll('.card[data-ticker]').forEach(card => {
+        const ticker = card.dataset.ticker.toLowerCase();
+        card.style.display = (!q || ticker.includes(q)) ? '' : 'none';
     });
 });
 </script>

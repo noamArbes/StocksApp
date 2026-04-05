@@ -258,6 +258,105 @@ form input[type=number]:focus {
     margin-top: 0.4rem;
 }
 
+/* ── Search bar ──────────────────────────────────── */
+.search-bar {
+    margin-bottom: 1rem;
+}
+.search-bar input {
+    width: 100%;
+    padding: 0.6rem 0.85rem;
+    background: #2a2420;
+    border: 1px solid #3a2e28;
+    border-radius: 8px;
+    color: #f5e6d3;
+    font-size: 0.95rem;
+}
+.search-bar input:focus {
+    outline: none;
+    border-color: #b5451b;
+}
+
+/* ── Triggered alarm ─────────────────────────────── */
+.card-triggered {
+    border-left-color: #f0b840;
+    box-shadow: 0 0 12px rgba(240,184,64,0.18);
+}
+.triggered-badge {
+    display: inline-block;
+    background: #f0b840;
+    color: #111;
+    font-size: 0.65rem;
+    font-weight: 800;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+    letter-spacing: 0.05em;
+}
+
+/* ── Price change & distance ─────────────────────── */
+.price-col { text-align: right; }
+.price-change {
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-top: 0.15rem;
+}
+.price-change-up   { color: #6fcf6f; }
+.price-change-down { color: #e07070; }
+
+.distance {
+    font-size: 0.8rem;
+    color: #7a6a5a;
+    grid-column: 1 / -1;
+}
+.distance-triggered {
+    color: #f0b840;
+    font-weight: 700;
+}
+
+/* ── Notes ───────────────────────────────────────── */
+.card-notes {
+    font-size: 0.82rem;
+    color: #c8a07a;
+    background: #1e1a18;
+    border-radius: 6px;
+    padding: 0.45rem 0.65rem;
+    margin-bottom: 0.75rem;
+    border-left: 3px solid #3a2e28;
+}
+form textarea {
+    display: block; width: 100%;
+    padding: 0.65rem 0.75rem;
+    background: #1e1a18;
+    border: 1px solid #3a2e28;
+    border-radius: 8px;
+    color: #f5e6d3;
+    font-size: 0.9rem;
+    font-family: inherit;
+    margin-top: 0.25rem;
+    resize: vertical;
+}
+form textarea:focus {
+    outline: none;
+    border-color: #b5451b;
+}
+form select {
+    display: block; width: 100%;
+    padding: 0.65rem 0.75rem;
+    background: #1e1a18;
+    border: 1px solid #3a2e28;
+    border-radius: 8px;
+    color: #f5e6d3;
+    font-size: 0.95rem;
+    margin-top: 0.25rem;
+    appearance: none;
+    cursor: pointer;
+}
+form select:focus {
+    outline: none;
+    border-color: #b5451b;
+}
+
 /* ── Autocomplete ────────────────────────────────── */
 .autocomplete-dropdown {
     display: none;

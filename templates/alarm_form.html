@@ -77,6 +77,21 @@
         </label>
         <input type="hidden" name="timezone" id="timezone-hidden" value="{{ form.get('timezone') or '' }}">
 
+        <label>Re-alert cooldown — minimum time between repeat alerts
+            <select name="snooze_hours">
+                {% set cur_snooze = form.get('snooze_hours', 72)|int %}
+                <option value="1"   {% if cur_snooze == 1   %}selected{% endif %}>1 hour</option>
+                <option value="6"   {% if cur_snooze == 6   %}selected{% endif %}>6 hours</option>
+                <option value="24"  {% if cur_snooze == 24  %}selected{% endif %}>1 day</option>
+                <option value="72"  {% if cur_snooze == 72  %}selected{% endif %}>3 days (default)</option>
+                <option value="168" {% if cur_snooze == 168 %}selected{% endif %}>1 week</option>
+            </select>
+        </label>
+
+        <label>Notes — optional reminder to yourself
+            <textarea name="notes" rows="2" placeholder="e.g. stop loss, take profit target">{{ form.get('notes') or '' }}</textarea>
+        </label>
+
         <label class="checkbox-label">
             <input type="checkbox" name="enabled"
                 {% if form.get('enabled', True) %}checked{% endif %}>
@@ -86,7 +101,13 @@
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">Save</button>
             <a href="{{ url_for('dashboard') }}" class="btn">Cancel</a>
+            {% if alarm %}
+            <button type="button" id="test-email-btn" class="btn" style="margin-left:auto">Send test email</button>
+            {% endif %}
         </div>
+        {% if alarm %}
+        <p id="test-email-status" style="font-size:0.85rem;margin-top:0.5rem;display:none"></p>
+        {% endif %}
     </form>
 </div>
 {% endblock %}
@@ -265,6 +286,38 @@ function clearErrorOnParent(labelId) {
     lbl.classList.remove('field-error');
     const s = lbl.querySelector('.field-error-msg');
     if (s) s.remove();
+}
+
+// ── Test email ───────────────────────────────────────────────
+const testBtn = document.getElementById('test-email-btn');
+if (testBtn) {
+    testBtn.addEventListener('click', () => {
+        const status = document.getElementById('test-email-status');
+        testBtn.disabled = true;
+        testBtn.textContent = 'Sending…';
+        status.style.display = 'none';
+        fetch(window.location.pathname.replace('/edit', '/test-email'), { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                status.style.display = 'block';
+                if (data.ok) {
+                    status.style.color = '#6fcf6f';
+                    status.textContent = 'Test email sent!';
+                } else {
+                    status.style.color = '#e07070';
+                    status.textContent = 'Error: ' + (data.error || 'unknown');
+                }
+            })
+            .catch(() => {
+                status.style.display = 'block';
+                status.style.color = '#e07070';
+                status.textContent = 'Failed to send.';
+            })
+            .finally(() => {
+                testBtn.disabled = false;
+                testBtn.textContent = 'Send test email';
+            });
+    });
 }
 </script>
 {% endblock %}

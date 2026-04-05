@@ -107,7 +107,51 @@ def dashboard():
                 prices[ticker] = checker.get_price(ticker)
             except Exception:
                 prices[ticker] = None
-    return render_template("dashboard.html", alarms=alarms, prices=prices, sort=sort)
+
+    triggered = {}
+    distances = {}
+    price_changes = {}
+    for alarm in alarms:
+        alarm_id = alarm.get("id")
+        ticker = alarm.get("ticker")
+        price = prices.get(ticker)
+        initial = alarm.get("initial_price")
+        price_changes[alarm_id] = (price - initial) / initial * 100 if (price and initial) else None
+        if price is None:
+            triggered[alarm_id] = False
+            distances[alarm_id] = None
+            continue
+        is_pct = alarm.get("upper_pct") is not None or alarm.get("lower_pct") is not None
+        if is_pct:
+            base = alarm.get("base_price")
+            if base is None:
+                triggered[alarm_id] = False
+                distances[alarm_id] = None
+            else:
+                t, _, actual_pct = checker.condition_met_pct(alarm, price)
+                triggered[alarm_id] = t
+                parts = []
+                if alarm.get("upper_pct") is not None:
+                    rem = alarm["upper_pct"] - actual_pct
+                    parts.append(f"↑ triggered" if rem <= 0 else f"↑ {rem:.1f}% to go")
+                if alarm.get("lower_pct") is not None:
+                    rem = alarm["lower_pct"] + actual_pct
+                    parts.append(f"↓ triggered" if rem <= 0 else f"↓ {rem:.1f}% to go")
+                distances[alarm_id] = " · ".join(parts) or None
+        else:
+            t, _, _ = checker.condition_met(alarm, price)
+            triggered[alarm_id] = t
+            parts = []
+            if alarm.get("upper_limit") is not None:
+                diff = alarm["upper_limit"] - price
+                parts.append("↑ triggered" if diff <= 0 else f"↑ ${diff:.2f} ({diff/price*100:.1f}%) to go")
+            if alarm.get("lower_limit") is not None:
+                diff = price - alarm["lower_limit"]
+                parts.append("↓ triggered" if diff <= 0 else f"↓ ${diff:.2f} ({diff/price*100:.1f}%) to go")
+            distances[alarm_id] = " · ".join(parts) or None
+
+    return render_template("dashboard.html", alarms=alarms, prices=prices, sort=sort,
+                           triggered=triggered, distances=distances, price_changes=price_changes)
 
 
 # --- Alarm CRUD ---
@@ -169,6 +213,67 @@ def alarm_toggle(alarm_id):
                 break
     modify_alarms(do_toggle)
     return redirect(url_for("dashboard"))
+
+
+# --- Duplicate alarm ---
+
+@app.route("/alarm/<alarm_id>/duplicate", methods=["POST"])
+@login_required
+def alarm_duplicate(alarm_id):
+    import uuid
+    alarms = read_alarms()
+    src = next((a for a in alarms if a.get("id") == alarm_id), None)
+    if src is None:
+        return redirect(url_for("dashboard"))
+    new_alarm = dict(src)
+    new_alarm["id"] = str(uuid.uuid4())[:8]
+    new_alarm["enabled"] = False
+    new_alarm["last_triggered"] = None
+    new_alarm["history"] = []
+    new_alarm["base_price"] = None
+    new_alarm["created_at"] = datetime.now(timezone.utc).isoformat()
+    try:
+        new_alarm["initial_price"] = checker.get_price(src["ticker"])
+    except Exception:
+        new_alarm["initial_price"] = src.get("initial_price")
+    def do_append(alarms):
+        alarms.append(new_alarm)
+    modify_alarms(do_append)
+    return redirect(url_for("dashboard"))
+
+
+# --- Test email ---
+
+@app.route("/alarm/<alarm_id>/test-email", methods=["POST"])
+@login_required
+def alarm_test_email(alarm_id):
+    api_key = os.environ.get("BREVO_API_KEY")
+    sender = os.environ.get("BREVO_SENDER_EMAIL")
+    if not api_key or not sender:
+        return jsonify({"error": "Email not configured on server"}), 500
+    alarms = read_alarms()
+    alarm = next((a for a in alarms if a.get("id") == alarm_id), None)
+    if alarm is None:
+        return jsonify({"error": "Alarm not found"}), 404
+    ticker = alarm.get("ticker", "?")
+    try:
+        price = checker.get_price(ticker)
+    except Exception:
+        price = None
+    price_str = f"${price:.2f}" if price is not None else "unavailable"
+    subject = f"Test Alert: {ticker} is currently at {price_str}"
+    body = (
+        f"This is a test email from StockAlarm.\n\n"
+        f"Ticker: {ticker}\n"
+        f"Current Price: {price_str}\n\n"
+        f"Your alarm is set up correctly."
+    )
+    to = alarm.get("email")
+    try:
+        checker.send_email(subject, body, to, api_key, sender)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # --- Chart data ---
@@ -266,11 +371,19 @@ def _alarm_from_form(form, existing=None):
     if not tz:
         return None, "Timezone (city) is required"
 
+    try:
+        snooze_hours = int(form.get("snooze_hours", 72))
+    except ValueError:
+        snooze_hours = 72
+    notes = form.get("notes", "").strip()
+
     alarm = {
         "id": existing["id"] if existing else str(uuid.uuid4())[:8],
         "ticker": ticker,
         "enabled": form.get("enabled") == "on",
         "timezone": tz,
+        "snooze_hours": snooze_hours,
+        "notes": notes or None,
         "last_triggered": existing.get("last_triggered") if existing else None,
         "email": emails if len(emails) > 1 else emails[0],
     }
