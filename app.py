@@ -232,7 +232,7 @@ def _alarm_from_form(form, existing=None):
 if __name__ == "__main__":
     from apscheduler.schedulers.background import BackgroundScheduler
     scheduler = BackgroundScheduler()
-    scheduler.add_job(checker.run, "interval", minutes=15)
+    scheduler.add_job(checker.run, "interval", minutes=15, kwargs={"path": _ALARMS_PATH})
     scheduler.start()
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)

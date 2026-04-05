@@ -183,7 +183,7 @@ def send_email(subject: str, body: str, to: str | list, api_key: str, sender: st
         raise Exception(f"HTTP {e.code}: {e.read().decode()}") from e
 
 
-def run() -> None:
+def run(path: str = None) -> None:
     api_key = os.environ.get("BREVO_API_KEY")
     sender = os.environ.get("BREVO_SENDER_EMAIL")
 
@@ -192,7 +192,8 @@ def run() -> None:
             "Missing required environment variables: BREVO_API_KEY and BREVO_SENDER_EMAIL"
         )
 
-    path = get_alarms_path()
+    if path is None:
+        path = get_alarms_path()
     alarms = load_alarms(path)
     changed = False
 
