@@ -105,7 +105,8 @@ LOCAL_PATH = "alarms.json"
 
 def get_alarms_path() -> str:
     """Returns the path to alarms.json — volume path on Railway, local path otherwise.
-    On each deploy, syncs alarm config from the local file while preserving runtime state."""
+    The volume is the source of truth. On each deploy, any alarms in the local file
+    that don't exist in the volume yet are seeded in (new git-committed alarms)."""
     data_dir = "/data"
     if os.path.isdir(data_dir):
         volume_path = os.path.join(data_dir, "alarms.json")
@@ -116,22 +117,20 @@ def get_alarms_path() -> str:
                 try:
                     with open(volume_path) as f:
                         volume_alarms = json.load(f)
-                    volume_state = {
-                        a["id"]: a
-                        for a in volume_alarms
-                        if "id" in a
-                    }
+                    # Volume is source of truth — only add alarms from local that
+                    # don't exist in volume yet (newly git-committed alarms).
+                    volume_ids = {a["id"] for a in volume_alarms if "id" in a}
                     for alarm in local_alarms:
-                        alarm_id = alarm.get("id")
-                        if alarm_id in volume_state:
-                            vol = volume_state[alarm_id]
-                            alarm["last_triggered"] = vol.get("last_triggered")
-                            # Only restore base_price if local doesn't explicitly reset it
-                            if alarm.get("base_price") is None and vol.get("base_price") is not None:
-                                alarm["base_price"] = vol["base_price"]
+                        if alarm.get("id") not in volume_ids:
+                            volume_alarms.append(alarm)
+                            print(f"[SEED] New alarm '{alarm.get('id')}' seeded from local file")
+                    save_alarms(volume_alarms, volume_path)
                 except Exception as e:
                     print(f"[WARN] Could not read volume alarms file, using local: {e}")
-            save_alarms(local_alarms, volume_path)
+                    save_alarms(local_alarms, volume_path)
+            else:
+                # Volume file doesn't exist yet — seed from local
+                save_alarms(local_alarms, volume_path)
         return volume_path
     return LOCAL_PATH
 
