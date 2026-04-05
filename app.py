@@ -2,6 +2,7 @@ import os
 import sys
 import threading
 from functools import wraps
+from datetime import datetime, timezone
 
 from flask import Flask, redirect, render_template, request, session, url_for, jsonify
 
@@ -213,6 +214,18 @@ def _alarm_from_form(form, existing=None):
         "last_triggered": existing.get("last_triggered") if existing else None,
         "email": emails if len(emails) > 1 else emails[0],
     }
+
+    if existing:
+        alarm["created_at"] = existing.get("created_at")
+        alarm["initial_price"] = existing.get("initial_price")
+        alarm["history"] = existing.get("history", [])
+    else:
+        alarm["created_at"] = datetime.now(timezone.utc).isoformat()
+        try:
+            alarm["initial_price"] = checker.get_price(ticker)
+        except Exception:
+            alarm["initial_price"] = None
+        alarm["history"] = []
 
     if alarm_type == "pct":
         upper_pct = form.get("upper_pct", "").strip()

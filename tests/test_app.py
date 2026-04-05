@@ -288,3 +288,58 @@ def test_dashboard_sort_oldest(client, tmp_path, monkeypatch):
     assert resp.status_code == 200
     body = resp.data.decode()
     assert body.index("AAPL") < body.index("TSLA")
+
+
+def test_alarm_creation_sets_created_at_and_initial_price(client, tmp_path, monkeypatch):
+    import app as app_module
+    alarms_file = tmp_path / "alarms_meta.json"
+    alarms_file.write_text(json.dumps([]))
+    monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
+    monkeypatch.setattr("checker.get_price", lambda t: 123.45)
+    login(client)
+    client.post("/alarm/new", data={
+        "ticker": "MSFT", "alarm_type": "price", "upper_limit": "500",
+        "lower_limit": "", "email": "a@b.com", "timezone": "", "enabled": "on",
+    })
+    saved = json.loads(alarms_file.read_text())
+    assert len(saved) == 1
+    assert "created_at" in saved[0]
+    assert saved[0]["initial_price"] == 123.45
+    assert saved[0]["history"] == []
+
+
+def test_alarm_creation_initial_price_null_on_fetch_failure(client, tmp_path, monkeypatch):
+    import app as app_module
+    alarms_file = tmp_path / "alarms_meta2.json"
+    alarms_file.write_text(json.dumps([]))
+    monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
+    def raise_error(t):
+        raise ValueError("no price")
+    monkeypatch.setattr("checker.get_price", raise_error)
+    login(client)
+    client.post("/alarm/new", data={
+        "ticker": "MSFT", "alarm_type": "price", "upper_limit": "500",
+        "lower_limit": "", "email": "a@b.com", "timezone": "", "enabled": "on",
+    })
+    saved = json.loads(alarms_file.read_text())
+    assert len(saved) == 1
+    assert saved[0]["initial_price"] is None
+
+
+def test_alarm_edit_preserves_created_at_and_initial_price(client, tmp_path, monkeypatch):
+    import app as app_module
+    alarms = [{"id": "meta1", "ticker": "WDC", "enabled": True, "upper_limit": 280.0,
+                "lower_limit": None, "email": "a@b.com", "last_triggered": None, "timezone": None,
+                "created_at": "2026-04-01T00:00:00+00:00", "initial_price": 99.99, "history": []}]
+    alarms_file = tmp_path / "alarms_meta3.json"
+    alarms_file.write_text(json.dumps(alarms))
+    monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
+    monkeypatch.setattr("checker.get_price", lambda t: 200.0)
+    login(client)
+    client.post("/alarm/meta1/edit", data={
+        "ticker": "WDC", "alarm_type": "price", "upper_limit": "300",
+        "lower_limit": "", "email": "a@b.com", "timezone": "", "enabled": "on",
+    })
+    saved = json.loads(alarms_file.read_text())
+    assert saved[0]["created_at"] == "2026-04-01T00:00:00+00:00"
+    assert saved[0]["initial_price"] == 99.99
