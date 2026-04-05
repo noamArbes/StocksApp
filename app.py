@@ -167,9 +167,12 @@ def chart_data(alarm_id):
     if alarm is None:
         return jsonify({"error": "not found"}), 404
     ticker = alarm.get("ticker")
+    period = request.args.get("period", "1mo")
+    if period not in ("5d", "1mo", "1y"):
+        period = "1mo"
     try:
         import yfinance as yf
-        hist = yf.Ticker(ticker).history(period="30d")
+        hist = yf.Ticker(ticker).history(period=period)
         labels = [str(d.date()) for d in hist.index]
         prices = [round(float(p), 2) for p in hist["Close"]]
         return jsonify({"labels": labels, "prices": prices})

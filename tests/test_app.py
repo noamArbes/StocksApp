@@ -202,3 +202,47 @@ def test_chart_data_returns_json(client, tmp_path, monkeypatch):
     assert "labels" in data
     assert "prices" in data
     assert len(data["prices"]) == 5
+
+
+def test_chart_data_accepts_valid_period(client, tmp_path, monkeypatch):
+    import app as app_module
+    import pandas as pd
+    alarms = [{"id": "cp1", "ticker": "AAPL", "enabled": True, "upper_limit": 200.0,
+                "lower_limit": None, "email": "a@b.com", "last_triggered": None, "timezone": None}]
+    alarms_file = tmp_path / "alarms_cp1.json"
+    alarms_file.write_text(json.dumps(alarms))
+    monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
+    captured = {}
+    import yfinance as yf
+    class FakeTicker:
+        def history(self, period):
+            captured["period"] = period
+            dates = pd.date_range("2026-01-01", periods=3, tz="UTC")
+            return pd.DataFrame({"Close": [100.0, 101.0, 102.0]}, index=dates)
+    monkeypatch.setattr(yf, "Ticker", lambda t: FakeTicker())
+    login(client)
+    resp = client.get("/alarm/cp1/chart-data?period=1y")
+    assert resp.status_code == 200
+    assert captured["period"] == "1y"
+
+
+def test_chart_data_invalid_period_falls_back_to_default(client, tmp_path, monkeypatch):
+    import app as app_module
+    import pandas as pd
+    alarms = [{"id": "cp2", "ticker": "AAPL", "enabled": True, "upper_limit": 200.0,
+                "lower_limit": None, "email": "a@b.com", "last_triggered": None, "timezone": None}]
+    alarms_file = tmp_path / "alarms_cp2.json"
+    alarms_file.write_text(json.dumps(alarms))
+    monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
+    captured = {}
+    import yfinance as yf
+    class FakeTicker:
+        def history(self, period):
+            captured["period"] = period
+            dates = pd.date_range("2026-01-01", periods=3, tz="UTC")
+            return pd.DataFrame({"Close": [100.0, 101.0, 102.0]}, index=dates)
+    monkeypatch.setattr(yf, "Ticker", lambda t: FakeTicker())
+    login(client)
+    resp = client.get("/alarm/cp2/chart-data?period=badvalue")
+    assert resp.status_code == 200
+    assert captured["period"] == "1mo"
