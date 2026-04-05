@@ -217,3 +217,61 @@ form input[type=number]:focus {
 .checkbox-label { display: flex; align-items: center; gap: 0.5rem; color: #c8a07a !important; }
 .checkbox-label input { width: auto; }
 .form-actions { display: flex; gap: 0.75rem; margin-top: 1.5rem; }
+
+/* ── Card metadata ───────────────────────────────── */
+.card-meta {
+    font-size: 0.78rem;
+    color: #7a6a5a;
+    grid-column: 1 / -1;
+    margin-top: 0.1rem;
+}
+
+/* ── History ─────────────────────────────────────── */
+.card-history {
+    margin-bottom: 0.75rem;
+    border-top: 1px solid #3a2e28;
+    padding-top: 0.6rem;
+}
+.card-history summary {
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: #7a6a5a;
+    user-select: none;
+    list-style: none;
+}
+.card-history summary::-webkit-details-marker { display: none; }
+.card-history summary::after { content: ' ▾'; }
+.card-history[open] summary::after { content: ' ▴'; }
+.history-list {
+    list-style: none;
+    margin-top: 0.5rem;
+}
+.history-list li {
+    font-size: 0.8rem;
+    color: #c8a07a;
+    padding: 0.2rem 0;
+    border-bottom: 1px solid #2a2420;
+}
+.history-empty {
+    font-size: 0.8rem;
+    color: #5a4a3a;
+    margin-top: 0.4rem;
+}
+
+/* ── Chart period buttons ────────────────────────── */
+.chart-controls {
+    display: flex;
+    gap: 0.35rem;
+    margin-bottom: 0.4rem;
+}
+.chart-period-btn {
+    padding: 0.2rem 0.55rem;
+    font-size: 0.78rem;
+    border-radius: 6px;
+    font-weight: 700;
+}
+.chart-period-btn.active {
+    background: #b5451b;
+    border-color: #c0522a;
+    color: #f5e6d3;
+}

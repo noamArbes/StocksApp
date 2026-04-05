@@ -49,10 +49,39 @@
         <div class="last-triggered">
             Last alert: {{ alarm.last_triggered[:10] if alarm.last_triggered else "Never" }}
         </div>
+        <div class="card-meta">
+            Created: {% if alarm.get('created_at') %}{{ alarm.created_at[:10] }}{% else %}N/A{% endif %}
+            &middot;
+            Initial: {% if alarm.get('initial_price') is not none %}${{ "%.2f"|format(alarm.initial_price) }}{% else %}N/A{% endif %}
+        </div>
+    </div>
+    <div class="chart-controls">
+        <button class="btn chart-period-btn active" data-period="1mo" data-alarm="{{ alarm.id }}">1M</button>
+        <button class="btn chart-period-btn" data-period="5d" data-alarm="{{ alarm.id }}">1W</button>
+        <button class="btn chart-period-btn" data-period="1y" data-alarm="{{ alarm.id }}">1Y</button>
     </div>
     <div class="card-chart">
         <canvas id="chart-{{ alarm.id }}" height="160"></canvas>
     </div>
+    <details class="card-history">
+        <summary>History</summary>
+        {% if alarm.get('history') %}
+        <ul class="history-list">
+            {% for entry in alarm.history|reverse %}
+            <li>
+                {{ entry.triggered_at[:10] }} —
+                {% if entry.type in ('upper_limit', 'lower_limit', 'upper', 'lower') %}
+                    {{ entry.type.replace('_', ' ') }} ${{ "%.2f"|format(entry.threshold) }} hit at ${{ "%.2f"|format(entry.price) }}
+                {% else %}
+                    {{ entry.type.replace('_', ' ') }} {{ "%.1f"|format(entry.threshold) }}% at ${{ "%.2f"|format(entry.price) }}
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="history-empty">No alerts sent yet.</p>
+        {% endif %}
+    </details>
     <div class="card-actions">
         <a href="/alarm/{{ alarm.id }}/edit" class="btn">Edit</a>
         <form method="post" action="/alarm/{{ alarm.id }}/delete" style="display:inline"
@@ -69,87 +98,106 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script>
+const _charts = {};
+
+function _renderChart(alarmId, period) {
+    const periodLabel = {'5d': '1W', '1mo': '1M', '1y': '1Y'}[period] || '1M';
+    fetch('/alarm/' + alarmId + '/chart-data?period=' + period)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) return;
+            const prices = data.prices;
+            const high = Math.max(...prices);
+            const low = Math.min(...prices);
+            if (_charts[alarmId]) { _charts[alarmId].destroy(); }
+            _charts[alarmId] = new Chart(document.getElementById('chart-' + alarmId), {
+                type: 'line',
+                data: {
+                    labels: data.labels,
+                    datasets: [
+                        {
+                            label: 'Price',
+                            data: prices,
+                            borderColor: '#d4922a',
+                            borderWidth: 1.5,
+                            pointRadius: 0,
+                            fill: false,
+                            tension: 0.1,
+                        },
+                        {
+                            label: periodLabel + ' High: $' + high.toFixed(2),
+                            data: prices.map(() => high),
+                            borderColor: '#22c55e',
+                            borderWidth: 1,
+                            borderDash: [6, 3],
+                            pointRadius: 0,
+                            fill: false,
+                        },
+                        {
+                            label: periodLabel + ' Low: $' + low.toFixed(2),
+                            data: prices.map(() => low),
+                            borderColor: '#ef4444',
+                            borderWidth: 1,
+                            borderDash: [6, 3],
+                            pointRadius: 0,
+                            fill: false,
+                        },
+                    ]
+                },
+                options: {
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: { boxWidth: 12, font: { size: 11 }, color: '#f5e6d3' },
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            ticks: {
+                                maxTicksLimit: 5,
+                                maxRotation: 0,
+                                font: { size: 10 },
+                                color: '#c8a07a',
+                                callback: function(val, idx) {
+                                    const label = this.getLabelForValue(val);
+                                    return label ? label.slice(5) : '';
+                                }
+                            },
+                            grid: { display: false },
+                        },
+                        y: {
+                            display: true,
+                            ticks: {
+                                maxTicksLimit: 4,
+                                font: { size: 10 },
+                                color: '#c8a07a',
+                                callback: val => '$' + val.toFixed(0),
+                            },
+                            grid: { color: 'rgba(255,255,255,0.07)' },
+                        }
+                    },
+                    animation: false,
+                }
+            });
+        })
+        .catch(() => {});
+}
+
 {% for alarm in alarms %}
-fetch('/alarm/{{ alarm.id }}/chart-data')
-    .then(r => r.json())
-    .then(data => {
-        if (data.error) return;
-        const prices = data.prices;
-        const high = Math.max(...prices);
-        const low = Math.min(...prices);
-        new Chart(document.getElementById('chart-{{ alarm.id }}'), {
-            type: 'line',
-            data: {
-                labels: data.labels,
-                datasets: [
-                    {
-                        label: 'Price',
-                        data: prices,
-                        borderColor: '#d4922a',
-                        borderWidth: 1.5,
-                        pointRadius: 0,
-                        fill: false,
-                        tension: 0.1,
-                    },
-                    {
-                        label: '30d High: $' + high.toFixed(2),
-                        data: prices.map(() => high),
-                        borderColor: '#22c55e',
-                        borderWidth: 1,
-                        borderDash: [6, 3],
-                        pointRadius: 0,
-                        fill: false,
-                    },
-                    {
-                        label: '30d Low: $' + low.toFixed(2),
-                        data: prices.map(() => low),
-                        borderColor: '#ef4444',
-                        borderWidth: 1,
-                        borderDash: [6, 3],
-                        pointRadius: 0,
-                        fill: false,
-                    },
-                ]
-            },
-            options: {
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top',
-                        labels: { boxWidth: 12, font: { size: 11 }, color: '#f5e6d3' },
-                    }
-                },
-                scales: {
-                    x: {
-                        display: true,
-                        ticks: {
-                            maxTicksLimit: 5,
-                            maxRotation: 0,
-                            font: { size: 10 },
-                            color: '#c8a07a',
-                            callback: function(val, idx) {
-                                const label = this.getLabelForValue(val);
-                                return label ? label.slice(5) : '';
-                            }
-                        },
-                        grid: { display: false },
-                    },
-                    y: {
-                        display: true,
-                        ticks: {
-                            maxTicksLimit: 4,
-                            font: { size: 10 },
-                            color: '#c8a07a',
-                            callback: val => '$' + val.toFixed(0),
-                        },
-                        grid: { color: 'rgba(255,255,255,0.07)' },
-                    }
-                },
-                animation: false,
-            }
-        });
-    })
-    .catch(() => {});
+_renderChart('{{ alarm.id }}', '1mo');
 {% endfor %}
+
+document.querySelectorAll('.chart-period-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const alarmId = this.dataset.alarm;
+        const period = this.dataset.period;
+        document.querySelectorAll('.chart-period-btn[data-alarm="' + alarmId + '"]')
+            .forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        _renderChart(alarmId, period);
+    });
+});
 </script>
 {% endblock %}
