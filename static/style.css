@@ -258,6 +258,46 @@ form input[type=number]:focus {
     margin-top: 0.4rem;
 }
 
+/* ── Autocomplete ────────────────────────────────── */
+.autocomplete-dropdown {
+    display: none;
+    position: absolute;
+    z-index: 100;
+    width: 100%;
+    background: #1e1a18;
+    border: 1px solid #3a2e28;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    max-height: 220px;
+    overflow-y: auto;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+.autocomplete-item {
+    padding: 0.6rem 0.75rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: #f5e6d3;
+    border-bottom: 1px solid #2a2420;
+}
+.autocomplete-item:last-child { border-bottom: none; }
+.autocomplete-item:hover { background: #2a2420; color: #f0b840; }
+
+/* Anchor dropdown to label */
+form label { position: relative; }
+
+/* ── Field validation ────────────────────────────── */
+.field-error > input,
+.field-error input[type=text],
+.field-error input[type=number] {
+    border-color: #c0392b !important;
+}
+.field-error-msg {
+    display: block;
+    margin-top: 0.3rem;
+    font-size: 0.8rem;
+    color: #e07070;
+}
+
 /* ── Chart period buttons ────────────────────────── */
 .chart-controls {
     display: flex;

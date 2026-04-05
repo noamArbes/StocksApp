@@ -3,11 +3,15 @@
 <div class="form-card">
     <h2>{{ title }}</h2>
     {% if error %}<p class="error">{{ error }}</p>{% endif %}
-    <form method="post">
-        <label>Ticker
-            <input type="text" name="ticker"
+    <form method="post" id="alarm-form">
+        <label id="label-ticker">Ticker
+            <input type="text" name="ticker" id="ticker-input"
                 value="{{ form.get('ticker', '') }}"
-                placeholder="e.g. WDC" required>
+                placeholder="e.g. AAPL" autocomplete="off"
+                {% if alarm %}readonly{% endif %}>
+            {% if not alarm %}
+            <div class="autocomplete-dropdown" id="ticker-dropdown"></div>
+            {% endif %}
         </label>
 
         <div class="radio-group">
@@ -24,42 +28,54 @@
         </div>
 
         <div id="price-fields">
-            <label>Upper Limit ($) — optional
-                <input type="number" step="0.01" name="upper_limit"
-                    value="{{ form.get('upper_limit', '') }}"
-                    placeholder="e.g. 300.00">
-            </label>
-            <label>Lower Limit ($) — optional
-                <input type="number" step="0.01" name="lower_limit"
-                    value="{{ form.get('lower_limit', '') }}"
-                    placeholder="e.g. 50.00">
+            <label id="label-price-limit">At least one price limit required
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:0.25rem">
+                    <div>
+                        <span style="font-size:0.82rem;color:#7a6a5a">Upper Limit ($) — optional</span>
+                        <input type="number" step="0.01" name="upper_limit"
+                            value="{{ form.get('upper_limit', '') }}"
+                            placeholder="e.g. 300.00">
+                    </div>
+                    <div>
+                        <span style="font-size:0.82rem;color:#7a6a5a">Lower Limit ($) — optional</span>
+                        <input type="number" step="0.01" name="lower_limit"
+                            value="{{ form.get('lower_limit', '') }}"
+                            placeholder="e.g. 50.00">
+                    </div>
+                </div>
             </label>
         </div>
 
         <div id="pct-fields" style="display:none">
-            <label>Rise % — alert if price rises by this amount (optional)
-                <input type="number" step="0.1" name="upper_pct"
-                    value="{{ form.get('upper_pct', '') }}"
-                    placeholder="e.g. 5">
-            </label>
-            <label>Drop % — alert if price drops by this amount (optional)
-                <input type="number" step="0.1" name="lower_pct"
-                    value="{{ form.get('lower_pct', '') }}"
-                    placeholder="e.g. 5">
+            <label id="label-pct-limit">At least one percentage required
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:0.25rem">
+                    <div>
+                        <span style="font-size:0.82rem;color:#7a6a5a">Rise % — optional</span>
+                        <input type="number" step="0.1" name="upper_pct"
+                            value="{{ form.get('upper_pct', '') }}"
+                            placeholder="e.g. 5">
+                    </div>
+                    <div>
+                        <span style="font-size:0.82rem;color:#7a6a5a">Drop % — optional</span>
+                        <input type="number" step="0.1" name="lower_pct"
+                            value="{{ form.get('lower_pct', '') }}"
+                            placeholder="e.g. 5">
+                    </div>
+                </div>
             </label>
         </div>
 
-        <label>Email(s) — comma-separated for multiple
-            <input type="text" name="email"
+        <label id="label-email">Email(s) — comma-separated for multiple
+            <input type="text" name="email" id="email-input"
                 value="{{ form.get('email', '') }}"
                 placeholder="you@example.com">
         </label>
 
-        <label>Timezone — optional, defaults to UTC
-            <input type="text" name="timezone"
-                value="{{ form.get('timezone') or '' }}"
-                placeholder="e.g. Asia/Jerusalem">
+        <label id="label-city">City (for timezone) *
+            <input type="text" id="city-input" autocomplete="off" placeholder="e.g. Tel Aviv">
+            <div class="autocomplete-dropdown" id="city-dropdown"></div>
         </label>
+        <input type="hidden" name="timezone" id="timezone-hidden" value="{{ form.get('timezone') or '' }}">
 
         <label class="checkbox-label">
             <input type="checkbox" name="enabled"
@@ -77,6 +93,7 @@
 
 {% block scripts %}
 <script>
+// ── Alarm type toggle ────────────────────────────────────────
 const radios = document.querySelectorAll('[name=alarm_type]');
 const priceFields = document.getElementById('price-fields');
 const pctFields = document.getElementById('pct-fields');
@@ -87,5 +104,167 @@ function updateFields() {
 }
 radios.forEach(r => r.addEventListener('change', updateFields));
 updateFields();
+
+// ── Autocomplete helper ──────────────────────────────────────
+function makeAutocomplete(input, dropdown, fetchFn, onSelect) {
+    let timer = null;
+
+    input.addEventListener('input', () => {
+        clearTimeout(timer);
+        const q = input.value.trim();
+        if (q.length < 2) { dropdown.innerHTML = ''; dropdown.style.display = 'none'; return; }
+        timer = setTimeout(() => {
+            fetchFn(q).then(items => {
+                if (!items.length) { dropdown.innerHTML = ''; dropdown.style.display = 'none'; return; }
+                dropdown.innerHTML = '';
+                items.forEach(item => {
+                    const el = document.createElement('div');
+                    el.className = 'autocomplete-item';
+                    el.textContent = item.label;
+                    el.addEventListener('mousedown', e => {
+                        e.preventDefault();
+                        onSelect(item);
+                        dropdown.innerHTML = '';
+                        dropdown.style.display = 'none';
+                    });
+                    dropdown.appendChild(el);
+                });
+                dropdown.style.display = 'block';
+            });
+        }, 300);
+    });
+
+    input.addEventListener('keydown', e => {
+        if (e.key === 'Escape') { dropdown.innerHTML = ''; dropdown.style.display = 'none'; }
+    });
+
+    document.addEventListener('click', e => {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.innerHTML = ''; dropdown.style.display = 'none';
+        }
+    });
+}
+
+// ── Ticker autocomplete (new alarm only) ─────────────────────
+const tickerInput = document.getElementById('ticker-input');
+const tickerDropdown = document.getElementById('ticker-dropdown');
+if (tickerDropdown) {
+    makeAutocomplete(tickerInput, tickerDropdown,
+        q => fetch('/ticker-search?q=' + encodeURIComponent(q)).then(r => r.json()).then(items =>
+            items.map(i => ({ label: i.symbol + ' — ' + i.name, value: i.symbol }))
+        ),
+        item => { tickerInput.value = item.value; }
+    );
+}
+
+// ── City autocomplete ────────────────────────────────────────
+const cityInput = document.getElementById('city-input');
+const cityDropdown = document.getElementById('city-dropdown');
+const timezoneHidden = document.getElementById('timezone-hidden');
+
+makeAutocomplete(cityInput, cityDropdown,
+    q => fetch('/city-search?q=' + encodeURIComponent(q)).then(r => r.json()).then(items =>
+        items.map(i => ({ label: i.city + ' — ' + i.country, timezone: i.timezone }))
+    ),
+    item => {
+        cityInput.value = item.label;
+        timezoneHidden.value = item.timezone;
+        document.getElementById('label-city').classList.remove('field-error');
+    }
+);
+
+// Pre-fill city input on edit when timezone already set
+(function() {
+    const tz = timezoneHidden.value;
+    if (!tz) return;
+    fetch('/timezone-to-city?tz=' + encodeURIComponent(tz))
+        .then(r => r.json())
+        .then(city => {
+            if (city) {
+                cityInput.value = city.city + ' — ' + city.country;
+            } else {
+                cityInput.value = tz;
+            }
+        });
+})();
+
+// ── Client-side validation ───────────────────────────────────
+document.getElementById('alarm-form').addEventListener('submit', function(e) {
+    let ok = true;
+
+    function setError(labelId, msg) {
+        const lbl = document.getElementById(labelId);
+        lbl.classList.add('field-error');
+        let span = lbl.querySelector('.field-error-msg');
+        if (!span) { span = document.createElement('span'); span.className = 'field-error-msg'; lbl.appendChild(span); }
+        span.textContent = msg;
+        ok = false;
+    }
+
+    function clearError(labelId) {
+        const lbl = document.getElementById(labelId);
+        lbl.classList.remove('field-error');
+        const span = lbl.querySelector('.field-error-msg');
+        if (span) span.remove();
+    }
+
+    // Ticker
+    if (!tickerInput.value.trim()) {
+        setError('label-ticker', 'Ticker is required');
+    } else {
+        clearError('label-ticker');
+    }
+
+    // Limit fields
+    const isPct = document.querySelector('[name=alarm_type]:checked').value === 'pct';
+    if (isPct) {
+        const up = document.querySelector('[name=upper_pct]').value.trim();
+        const lo = document.querySelector('[name=lower_pct]').value.trim();
+        if (!up && !lo) { setError('label-pct-limit', 'At least one percentage threshold is required'); }
+        else { clearError('label-pct-limit'); }
+    } else {
+        const up = document.querySelector('[name=upper_limit]').value.trim();
+        const lo = document.querySelector('[name=lower_limit]').value.trim();
+        if (!up && !lo) { setError('label-price-limit', 'At least one price limit is required'); }
+        else { clearError('label-price-limit'); }
+    }
+
+    // Email
+    if (!document.getElementById('email-input').value.trim()) {
+        setError('label-email', 'Email is required');
+    } else {
+        clearError('label-email');
+    }
+
+    // Timezone
+    if (!timezoneHidden.value.trim()) {
+        setError('label-city', 'Please select a city from the dropdown');
+    } else {
+        clearError('label-city');
+    }
+
+    if (!ok) e.preventDefault();
+});
+
+// Clear field errors on input
+['ticker-input', 'email-input', 'city-input'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', () => {
+        const lbl = el.closest('label');
+        if (lbl) { lbl.classList.remove('field-error'); const s = lbl.querySelector('.field-error-msg'); if (s) s.remove(); }
+    });
+});
+document.querySelectorAll('[name=upper_limit],[name=lower_limit]').forEach(el => {
+    el.addEventListener('input', () => { clearErrorOnParent('label-price-limit'); });
+});
+document.querySelectorAll('[name=upper_pct],[name=lower_pct]').forEach(el => {
+    el.addEventListener('input', () => { clearErrorOnParent('label-pct-limit'); });
+});
+function clearErrorOnParent(labelId) {
+    const lbl = document.getElementById(labelId);
+    lbl.classList.remove('field-error');
+    const s = lbl.querySelector('.field-error-msg');
+    if (s) s.remove();
+}
 </script>
 {% endblock %}

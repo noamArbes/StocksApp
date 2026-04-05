@@ -4,9 +4,15 @@ import threading
 from functools import wraps
 from datetime import datetime, timezone
 
+import json
+import urllib.request
+import urllib.parse
+import urllib.error
+
 from flask import Flask, redirect, render_template, request, session, url_for, jsonify
 
 import checker
+import cities_data
 
 # --- Startup validation ---
 _UI_PASSWORD = os.environ.get("UI_PASSWORD")
@@ -189,6 +195,56 @@ def chart_data(alarm_id):
         return jsonify({"error": "Could not fetch chart data"}), 500
 
 
+# --- Autocomplete endpoints ---
+
+@app.route("/ticker-search")
+@login_required
+def ticker_search():
+    q = request.args.get("q", "").strip()
+    if len(q) < 2:
+        return jsonify([])
+    try:
+        url = "https://query1.finance.yahoo.com/v1/finance/search?" + urllib.parse.urlencode({
+            "q": q, "quotesCount": 6, "newsCount": 0
+        })
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read())
+        results = [
+            {"symbol": item["symbol"], "name": item.get("shortname") or item.get("longname") or ""}
+            for item in data.get("quotes", [])
+            if item.get("symbol")
+        ]
+        return jsonify(results[:6])
+    except Exception:
+        return jsonify([])
+
+
+@app.route("/city-search")
+@login_required
+def city_search():
+    q = request.args.get("q", "").strip().lower()
+    if len(q) < 2:
+        return jsonify([])
+    matches = [
+        c for c in cities_data.CITIES
+        if q in c["city"].lower() or c["city"].lower().startswith(q)
+    ]
+    # Prioritize prefix matches
+    matches.sort(key=lambda c: (not c["city"].lower().startswith(q), c["city"]))
+    return jsonify(matches[:8])
+
+
+@app.route("/timezone-to-city")
+@login_required
+def timezone_to_city():
+    tz = request.args.get("tz", "").strip()
+    for c in cities_data.CITIES:
+        if c["timezone"] == tz:
+            return jsonify(c)
+    return jsonify(None)
+
+
 # --- Form helper ---
 
 def _alarm_from_form(form, existing=None):
@@ -206,11 +262,15 @@ def _alarm_from_form(form, existing=None):
 
     alarm_type = form.get("alarm_type", "price")
 
+    timezone = form.get("timezone", "").strip() or None
+    if not timezone:
+        return None, "Timezone (city) is required"
+
     alarm = {
         "id": existing["id"] if existing else str(uuid.uuid4())[:8],
         "ticker": ticker,
         "enabled": form.get("enabled") == "on",
-        "timezone": form.get("timezone", "").strip() or None,
+        "timezone": timezone,
         "last_triggered": existing.get("last_triggered") if existing else None,
         "email": emails if len(emails) > 1 else emails[0],
     }
