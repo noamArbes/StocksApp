@@ -235,6 +235,14 @@ def run(path: str = None) -> None:
                     try:
                         send_email(subject, body, alarm["email"], api_key, sender)
                         alarm["last_triggered"] = datetime.now(timezone.utc).isoformat()
+                        entry = {
+                            "triggered_at": alarm["last_triggered"],
+                            "type": direction,
+                            "price": price,
+                            "threshold": pct_threshold,
+                        }
+                        alarm.setdefault("history", []).append(entry)
+                        alarm["history"] = alarm["history"][-10:]
                         changed = True
                         print(f"[ALERT] Email sent for {ticker} at {actual_pct:+.1f}%")
                     except KeyError:
@@ -263,6 +271,14 @@ def run(path: str = None) -> None:
                     try:
                         send_email(subject, body, alarm["email"], api_key, sender)
                         alarm["last_triggered"] = datetime.now(timezone.utc).isoformat()
+                        entry = {
+                            "triggered_at": alarm["last_triggered"],
+                            "type": limit_type,
+                            "price": price,
+                            "threshold": limit_value,
+                        }
+                        alarm.setdefault("history", []).append(entry)
+                        alarm["history"] = alarm["history"][-10:]
                         changed = True
                         print(f"[ALERT] Email sent for {ticker} at ${price:.2f}")
                     except KeyError:

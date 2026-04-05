@@ -1,4 +1,5 @@
 from datetime import datetime, timezone, timedelta
+import checker
 from checker import condition_met, should_alert
 
 
@@ -304,3 +305,70 @@ def test_format_body_pct_lower_shows_fallen():
 def test_format_body_pct_with_timezone():
     body = format_body_pct("WDC", 106.0, "upper_pct", 5.0, 100.0, 6.0, tz_name="Asia/Jerusalem")
     assert "IST" in body or "IDT" in body or "+03" in body or "+02" in body
+
+
+def test_history_appended_after_price_alarm_triggers(monkeypatch, tmp_path):
+    alarm = {
+        "id": "h1", "ticker": "WDC", "enabled": True,
+        "upper_limit": 200.0, "lower_limit": None,
+        "email": "a@b.com", "last_triggered": None, "timezone": None,
+    }
+    alarms_file = tmp_path / "alarms.json"
+    alarms_file.write_text(json.dumps([alarm]))
+    monkeypatch.setenv("BREVO_API_KEY", "key")
+    monkeypatch.setenv("BREVO_SENDER_EMAIL", "from@test.com")
+    monkeypatch.setattr(checker, "get_price", lambda t: 250.0)
+    monkeypatch.setattr(checker, "send_email", lambda *a, **kw: None)
+    checker.run(path=str(alarms_file))
+    saved = json.loads(alarms_file.read_text())
+    assert len(saved[0]["history"]) == 1
+    entry = saved[0]["history"][0]
+    assert entry["type"] == "upper"
+    assert entry["price"] == 250.0
+    assert entry["threshold"] == 200.0
+    assert "triggered_at" in entry
+
+
+def test_history_capped_at_10_entries(monkeypatch, tmp_path):
+    existing_history = [
+        {"triggered_at": f"2026-01-{i:02d}T00:00:00+00:00",
+         "type": "upper", "price": 250.0, "threshold": 200.0}
+        for i in range(1, 11)
+    ]
+    alarm = {
+        "id": "h2", "ticker": "WDC", "enabled": True,
+        "upper_limit": 200.0, "lower_limit": None,
+        "email": "a@b.com", "last_triggered": None, "timezone": None,
+        "history": existing_history,
+    }
+    alarms_file = tmp_path / "alarms.json"
+    alarms_file.write_text(json.dumps([alarm]))
+    monkeypatch.setenv("BREVO_API_KEY", "key")
+    monkeypatch.setenv("BREVO_SENDER_EMAIL", "from@test.com")
+    monkeypatch.setattr(checker, "get_price", lambda t: 250.0)
+    monkeypatch.setattr(checker, "send_email", lambda *a, **kw: None)
+    checker.run(path=str(alarms_file))
+    saved = json.loads(alarms_file.read_text())
+    assert len(saved[0]["history"]) == 10
+
+
+def test_history_appended_after_pct_alarm_triggers(monkeypatch, tmp_path):
+    alarm = {
+        "id": "h3", "ticker": "WDC", "enabled": True,
+        "upper_pct": 5.0, "lower_pct": None,
+        "base_price": 100.0,
+        "email": "a@b.com", "last_triggered": None, "timezone": None,
+    }
+    alarms_file = tmp_path / "alarms.json"
+    alarms_file.write_text(json.dumps([alarm]))
+    monkeypatch.setenv("BREVO_API_KEY", "key")
+    monkeypatch.setenv("BREVO_SENDER_EMAIL", "from@test.com")
+    monkeypatch.setattr(checker, "get_price", lambda t: 110.0)
+    monkeypatch.setattr(checker, "send_email", lambda *a, **kw: None)
+    checker.run(path=str(alarms_file))
+    saved = json.loads(alarms_file.read_text())
+    assert len(saved[0]["history"]) == 1
+    entry = saved[0]["history"][0]
+    assert entry["type"] == "upper_pct"
+    assert entry["price"] == 110.0
+    assert entry["threshold"] == 5.0
