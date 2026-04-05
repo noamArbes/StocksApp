@@ -187,8 +187,15 @@ function _renderChart(alarmId, period) {
                             position: 'right',
                             min: pctMin,
                             max: pctMax,
+                            afterBuildTicks: axis => {
+                                axis.ticks.push({ value: pctMin }, { value: pctMax });
+                                const seen = new Set();
+                                axis.ticks = axis.ticks
+                                    .filter(t => { const k = t.value.toFixed(1); return seen.has(k) ? false : seen.add(k); })
+                                    .sort((a, b) => a.value - b.value);
+                            },
                             ticks: {
-                                maxTicksLimit: 4,
+                                maxTicksLimit: 6,
                                 font: { size: 10 },
                                 color: '#c8a07a',
                                 callback: val => (val >= 0 ? '+' : '') + val.toFixed(1) + '%',
