@@ -262,15 +262,15 @@ def _alarm_from_form(form, existing=None):
 
     alarm_type = form.get("alarm_type", "price")
 
-    timezone = form.get("timezone", "").strip() or None
-    if not timezone:
+    tz = form.get("timezone", "").strip() or None
+    if not tz:
         return None, "Timezone (city) is required"
 
     alarm = {
         "id": existing["id"] if existing else str(uuid.uuid4())[:8],
         "ticker": ticker,
         "enabled": form.get("enabled") == "on",
-        "timezone": timezone,
+        "timezone": tz,
         "last_triggered": existing.get("last_triggered") if existing else None,
         "email": emails if len(emails) > 1 else emails[0],
     }
