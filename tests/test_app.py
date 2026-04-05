@@ -246,3 +246,45 @@ def test_chart_data_invalid_period_falls_back_to_default(client, tmp_path, monke
     resp = client.get("/alarm/cp2/chart-data?period=badvalue")
     assert resp.status_code == 200
     assert captured["period"] == "1mo"
+
+
+def test_dashboard_sort_az(client, tmp_path, monkeypatch):
+    import app as app_module
+    alarms = [
+        {"id": "s1", "ticker": "TSLA", "enabled": True, "upper_limit": 100.0,
+         "lower_limit": None, "email": "a@b.com", "last_triggered": None, "timezone": None,
+         "created_at": "2026-04-01T00:00:00+00:00"},
+        {"id": "s2", "ticker": "AAPL", "enabled": True, "upper_limit": 200.0,
+         "lower_limit": None, "email": "a@b.com", "last_triggered": None, "timezone": None,
+         "created_at": "2026-04-02T00:00:00+00:00"},
+    ]
+    alarms_file = tmp_path / "alarms_sort.json"
+    alarms_file.write_text(json.dumps(alarms))
+    monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
+    monkeypatch.setattr("checker.get_price", lambda t: 42.0)
+    login(client)
+    resp = client.get("/dashboard?sort=az")
+    assert resp.status_code == 200
+    body = resp.data.decode()
+    assert body.index("AAPL") < body.index("TSLA")
+
+
+def test_dashboard_sort_oldest(client, tmp_path, monkeypatch):
+    import app as app_module
+    alarms = [
+        {"id": "s3", "ticker": "TSLA", "enabled": True, "upper_limit": 100.0,
+         "lower_limit": None, "email": "a@b.com", "last_triggered": None, "timezone": None,
+         "created_at": "2026-04-02T00:00:00+00:00"},
+        {"id": "s4", "ticker": "AAPL", "enabled": True, "upper_limit": 200.0,
+         "lower_limit": None, "email": "a@b.com", "last_triggered": None, "timezone": None,
+         "created_at": "2026-04-01T00:00:00+00:00"},
+    ]
+    alarms_file = tmp_path / "alarms_sort2.json"
+    alarms_file.write_text(json.dumps(alarms))
+    monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
+    monkeypatch.setattr("checker.get_price", lambda t: 42.0)
+    login(client)
+    resp = client.get("/dashboard?sort=oldest")
+    assert resp.status_code == 200
+    body = resp.data.decode()
+    assert body.index("AAPL") < body.index("TSLA")

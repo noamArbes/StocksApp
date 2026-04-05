@@ -85,6 +85,13 @@ def logout():
 @login_required
 def dashboard():
     alarms = read_alarms()
+    sort = request.args.get("sort", "newest")
+    if sort == "oldest":
+        alarms.sort(key=lambda a: a.get("created_at") or "")
+    elif sort == "az":
+        alarms.sort(key=lambda a: a.get("ticker", ""))
+    else:
+        alarms.sort(key=lambda a: a.get("created_at") or "", reverse=True)
     prices = {}
     for alarm in alarms:
         ticker = alarm.get("ticker")
@@ -93,7 +100,7 @@ def dashboard():
                 prices[ticker] = checker.get_price(ticker)
             except Exception:
                 prices[ticker] = None
-    return render_template("dashboard.html", alarms=alarms, prices=prices)
+    return render_template("dashboard.html", alarms=alarms, prices=prices, sort=sort)
 
 
 # --- Alarm CRUD ---

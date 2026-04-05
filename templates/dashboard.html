@@ -5,6 +5,15 @@
     <a href="{{ url_for('alarm_new') }}" class="btn btn-primary">+ Add</a>
 </div>
 
+<div class="sort-controls">
+    <a href="{{ url_for('dashboard', sort='newest') }}"
+       class="btn {% if sort == 'newest' %}btn-primary{% endif %}">Newest</a>
+    <a href="{{ url_for('dashboard', sort='oldest') }}"
+       class="btn {% if sort == 'oldest' %}btn-primary{% endif %}">Oldest</a>
+    <a href="{{ url_for('dashboard', sort='az') }}"
+       class="btn {% if sort == 'az' %}btn-primary{% endif %}">A–Z</a>
+</div>
+
 {% for alarm in alarms %}
 <div class="card {% if not alarm.enabled %}card-disabled{% endif %}">
     <div class="card-header">
