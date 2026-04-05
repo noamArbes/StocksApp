@@ -105,32 +105,16 @@ LOCAL_PATH = "alarms.json"
 
 def get_alarms_path() -> str:
     """Returns the path to alarms.json — volume path on Railway, local path otherwise.
-    The volume is the source of truth. On each deploy, any alarms in the local file
-    that don't exist in the volume yet are seeded in (new git-committed alarms)."""
+    If the volume file already exists it is used as-is (the UI is the source of truth).
+    Only seeds from the local file on the very first deploy when no volume file exists yet."""
     data_dir = "/data"
     if os.path.isdir(data_dir):
         volume_path = os.path.join(data_dir, "alarms.json")
-        if os.path.exists(LOCAL_PATH):
+        if not os.path.exists(volume_path) and os.path.exists(LOCAL_PATH):
             with open(LOCAL_PATH) as f:
                 local_alarms = json.load(f)
-            if os.path.exists(volume_path):
-                try:
-                    with open(volume_path) as f:
-                        volume_alarms = json.load(f)
-                    # Volume is source of truth — only add alarms from local that
-                    # don't exist in volume yet (newly git-committed alarms).
-                    volume_ids = {a["id"] for a in volume_alarms if "id" in a}
-                    for alarm in local_alarms:
-                        if alarm.get("id") not in volume_ids:
-                            volume_alarms.append(alarm)
-                            print(f"[SEED] New alarm '{alarm.get('id')}' seeded from local file")
-                    save_alarms(volume_alarms, volume_path)
-                except Exception as e:
-                    print(f"[WARN] Could not read volume alarms file, using local: {e}")
-                    save_alarms(local_alarms, volume_path)
-            else:
-                # Volume file doesn't exist yet — seed from local
-                save_alarms(local_alarms, volume_path)
+            save_alarms(local_alarms, volume_path)
+            print(f"[SEED] Volume initialised from local file ({len(local_alarms)} alarms)")
         return volume_path
     return LOCAL_PATH
 
