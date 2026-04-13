@@ -378,3 +378,82 @@ def test_duplicate_route_removed(client):
     login(client)
     resp = client.post("/alarm/nonexistent/duplicate")
     assert resp.status_code == 404
+
+
+def test_create_tase_alarm(client):
+    login(client)
+    with patch("tase.get_price", return_value=185.30):
+        resp = client.post("/alarm/new", data={
+            "ticker": "Eltra Corp",
+            "source": "tase",
+            "tase_id": "1175819",
+            "tase_type": "security",
+            "alarm_type": "price",
+            "upper_limit": "200",
+            "email": "test@example.com",
+            "timezone": "Asia/Jerusalem",
+            "snooze_hours": "72",
+            "enabled": "on",
+        }, follow_redirects=True)
+    assert resp.status_code == 200
+    alarms = json.loads(open(app_module._alarms_path()).read())
+    assert len(alarms) == 1
+    assert alarms[0]["source"] == "tase"
+    assert alarms[0]["tase_id"] == "1175819"
+    assert alarms[0]["initial_price"] == 185.30
+    assert alarms[0]["ticker"] == "Eltra Corp"  # preserves case for TASE
+
+
+def test_create_alarm_with_manual_reference_price(client):
+    login(client)
+    with patch("checker.get_price", return_value=155.0):
+        resp = client.post("/alarm/new", data={
+            "ticker": "AAPL",
+            "alarm_type": "price",
+            "upper_limit": "200",
+            "email": "test@example.com",
+            "timezone": "America/New_York",
+            "snooze_hours": "72",
+            "enabled": "on",
+            "reference_price": "130.00",
+        }, follow_redirects=True)
+    assert resp.status_code == 200
+    alarms = json.loads(open(app_module._alarms_path()).read())
+    assert alarms[0]["initial_price"] == 130.0  # manual price used, not live fetch
+
+
+def test_create_pct_alarm_with_manual_reference_price(client):
+    login(client)
+    with patch("checker.get_price", return_value=155.0):
+        resp = client.post("/alarm/new", data={
+            "ticker": "AAPL",
+            "alarm_type": "pct",
+            "upper_pct": "5",
+            "email": "test@example.com",
+            "timezone": "America/New_York",
+            "snooze_hours": "72",
+            "enabled": "on",
+            "reference_price": "130.00",
+        }, follow_redirects=True)
+    assert resp.status_code == 200
+    alarms = json.loads(open(app_module._alarms_path()).read())
+    assert alarms[0]["base_price"] == 130.0
+    assert alarms[0]["initial_price"] == 130.0
+
+
+def test_create_tase_alarm_missing_tase_id_returns_error(client):
+    login(client)
+    resp = client.post("/alarm/new", data={
+        "ticker": "Some Fund",
+        "source": "tase",
+        "tase_id": "",
+        "tase_type": "fund",
+        "alarm_type": "price",
+        "upper_limit": "200",
+        "email": "test@example.com",
+        "timezone": "Asia/Jerusalem",
+        "snooze_hours": "72",
+        "enabled": "on",
+    })
+    assert resp.status_code == 200
+    assert b"select a security" in resp.data

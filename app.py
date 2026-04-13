@@ -349,9 +349,18 @@ def _alarm_from_form(form, existing=None):
     """Parse and validate form data. Returns (alarm_dict, error_str_or_None)."""
     import uuid
 
-    ticker = form.get("ticker", "").strip().upper()
-    if not ticker:
+    source = form.get("source", "yfinance")
+    is_tase = source == "tase"
+
+    ticker_raw = form.get("ticker", "").strip()
+    if not ticker_raw:
         return None, "Ticker is required"
+    ticker = ticker_raw if is_tase else ticker_raw.upper()
+
+    tase_id = form.get("tase_id", "").strip() if is_tase else None
+    tase_type = form.get("tase_type", "").strip() if is_tase else None
+    if is_tase and not tase_id:
+        return None, "Please select a security from the dropdown"
 
     email_raw = form.get("email", "").strip()
     emails = [e.strip() for e in email_raw.split(",") if e.strip()]
@@ -359,7 +368,6 @@ def _alarm_from_form(form, existing=None):
         return None, "At least one email is required"
 
     alarm_type = form.get("alarm_type", "price")
-
     tz = form.get("timezone", "").strip() or None
     if not tz:
         return None, "Timezone (city) is required"
@@ -369,6 +377,15 @@ def _alarm_from_form(form, existing=None):
     except ValueError:
         snooze_hours = 72
     notes = form.get("notes", "").strip()
+
+    # Manual reference price (overrides live fetch for initial_price / base_price)
+    ref_price_raw = form.get("reference_price", "").strip()
+    manual_ref = None
+    if ref_price_raw:
+        try:
+            manual_ref = float(ref_price_raw)
+        except ValueError:
+            return None, "Reference price must be a number"
 
     alarm = {
         "id": existing["id"] if existing else str(uuid.uuid4())[:8],
@@ -381,17 +398,28 @@ def _alarm_from_form(form, existing=None):
         "email": emails if len(emails) > 1 else emails[0],
     }
 
+    if is_tase:
+        alarm["source"] = "tase"
+        alarm["tase_id"] = tase_id
+        alarm["tase_type"] = tase_type
+
     if existing:
         alarm["created_at"] = existing.get("created_at")
         alarm["initial_price"] = existing.get("initial_price")
         alarm["history"] = existing.get("history", [])
     else:
         alarm["created_at"] = datetime.now(timezone.utc).isoformat()
-        try:
-            alarm["initial_price"] = checker.get_price(ticker)
-        except Exception:
-            alarm["initial_price"] = None
         alarm["history"] = []
+        if manual_ref is not None:
+            alarm["initial_price"] = manual_ref
+        else:
+            try:
+                if is_tase:
+                    alarm["initial_price"] = tase.get_price(tase_id, tase_type)
+                else:
+                    alarm["initial_price"] = checker.get_price(ticker)
+            except Exception:
+                alarm["initial_price"] = None
 
     if alarm_type == "pct":
         upper_pct = form.get("upper_pct", "").strip()
@@ -403,7 +431,12 @@ def _alarm_from_form(form, existing=None):
             return None, "Percentage values must be numbers"
         if alarm["upper_pct"] is None and alarm["lower_pct"] is None:
             return None, "At least one percentage threshold is required"
-        alarm["base_price"] = existing.get("base_price") if existing else None
+        if existing:
+            alarm["base_price"] = existing.get("base_price")
+        elif manual_ref is not None:
+            alarm["base_price"] = manual_ref
+        else:
+            alarm["base_price"] = None
     else:
         upper = form.get("upper_limit", "").strip()
         lower = form.get("lower_limit", "").strip()
