@@ -32,8 +32,11 @@ def load_securities_cache() -> list[dict]:
         t = item.get("Type")
         if t not in (1, 4):
             continue
+        item_id = item.get("Id")
+        if item_id is None:
+            continue
         results.append({
-            "id": str(item["Id"]),
+            "id": str(item_id),
             "name": item.get("Name") or "",
             "ticker": item.get("Smb"),
             "type": "fund" if t == 4 else "security",
