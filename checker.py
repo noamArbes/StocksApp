@@ -211,7 +211,7 @@ def run(path: str = None) -> None:
             if alarm.get("base_price") is None:
                 alarm["base_price"] = price
                 changed = True
-                print(f"[BASE] {ticker}: base price set to ${price:.2f}")
+                print(f"[BASE] {ticker}: base price set to {currency}{price:.2f}")
                 continue
 
             triggered, direction, actual_pct = condition_met_pct(alarm, price)
@@ -244,7 +244,7 @@ def run(path: str = None) -> None:
                 if alarm.get("last_triggered") is not None:
                     alarm["last_triggered"] = None
                     changed = True
-                print(f"[OK] {ticker}: ${price:.2f} ({actual_pct:+.1f}% from base ${alarm['base_price']:.2f})")
+                print(f"[OK] {ticker}: {currency}{price:.2f} ({actual_pct:+.1f}% from base {currency}{alarm['base_price']:.2f})")
 
         else:
             if not alarm.get("upper_limit") and not alarm.get("lower_limit"):
@@ -269,7 +269,7 @@ def run(path: str = None) -> None:
                         alarm.setdefault("history", []).append(entry)
                         alarm["history"] = alarm["history"][-10:]
                         changed = True
-                        print(f"[ALERT] Email sent for {ticker} at ${price:.2f}")
+                        print(f"[ALERT] Email sent for {ticker} at {currency}{price:.2f}")
                     except KeyError:
                         print(f"[ERROR] Alarm {ticker} is missing required field 'email', skipping")
                     except Exception as e:
@@ -280,7 +280,7 @@ def run(path: str = None) -> None:
                 if alarm.get("last_triggered") is not None:
                     alarm["last_triggered"] = None
                     changed = True
-                print(f"[OK] {ticker}: ${price:.2f} — no condition met")
+                print(f"[OK] {ticker}: {currency}{price:.2f} — no condition met")
 
     if changed:
         save_alarms(alarms, path)
