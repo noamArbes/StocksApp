@@ -343,3 +343,38 @@ def test_alarm_edit_preserves_created_at_and_initial_price(client, tmp_path, mon
     saved = json.loads(alarms_file.read_text())
     assert saved[0]["created_at"] == "2026-04-01T00:00:00+00:00"
     assert saved[0]["initial_price"] == 99.99
+
+
+from unittest.mock import patch
+
+
+def test_tase_search_returns_results(client):
+    login(client)
+    sample_cache = [
+        {"id": "1175819", "name": "Eltra Corp", "ticker": "ELTR", "type": "security"},
+        {"id": "5118393", "name": "Migdal Bonds Fund", "ticker": None, "type": "fund"},
+    ]
+    with patch.object(app_module, "_tase_cache", sample_cache):
+        resp = client.get("/api/tase-search?q=eltra")
+    assert resp.status_code == 200
+    data = json.loads(resp.data)
+    assert len(data) == 1
+    assert data[0]["id"] == "1175819"
+
+
+def test_tase_search_requires_login(client):
+    resp = client.get("/api/tase-search?q=eltra")
+    assert resp.status_code in (302, 401)
+
+
+def test_tase_search_short_query_returns_empty(client):
+    login(client)
+    resp = client.get("/api/tase-search?q=e")
+    assert resp.status_code == 200
+    assert json.loads(resp.data) == []
+
+
+def test_duplicate_route_removed(client):
+    login(client)
+    resp = client.post("/alarm/nonexistent/duplicate")
+    assert resp.status_code == 404

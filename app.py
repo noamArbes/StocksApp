@@ -13,6 +13,7 @@ from flask import Flask, redirect, render_template, request, session, url_for, j
 
 import checker
 import cities_data
+import tase
 
 # --- Startup validation ---
 _UI_PASSWORD = os.environ.get("UI_PASSWORD")
@@ -27,6 +28,7 @@ app.secret_key = _SECRET_KEY
 
 _lock = threading.Lock()
 _ALARMS_PATH = checker.get_alarms_path()  # sync local→volume once at startup
+_tase_cache = tase.load_securities_cache()
 
 
 def _alarms_path():
@@ -102,11 +104,15 @@ def dashboard():
     prices = {}
     for alarm in alarms:
         ticker = alarm.get("ticker")
-        if ticker and ticker not in prices:
-            try:
+        if not ticker or ticker in prices:
+            continue
+        try:
+            if alarm.get("source") == "tase":
+                prices[ticker] = tase.get_price(alarm["tase_id"], alarm["tase_type"])
+            else:
                 prices[ticker] = checker.get_price(ticker)
-            except Exception:
-                prices[ticker] = None
+        except Exception:
+            prices[ticker] = None
 
     triggered = {}
     distances = {}
@@ -141,13 +147,14 @@ def dashboard():
         else:
             t, _, _ = checker.condition_met(alarm, price)
             triggered[alarm_id] = t
+            curr = "₪" if alarm.get("source") == "tase" else "$"
             parts = []
             if alarm.get("upper_limit") is not None:
                 diff = alarm["upper_limit"] - price
-                parts.append("↑ triggered" if diff <= 0 else f"↑ ${diff:.2f} ({diff/price*100:.1f}%) to go")
+                parts.append("↑ triggered" if diff <= 0 else f"↑ {curr}{diff:.2f} ({diff/price*100:.1f}%) to go")
             if alarm.get("lower_limit") is not None:
                 diff = price - alarm["lower_limit"]
-                parts.append("↓ triggered" if diff <= 0 else f"↓ ${diff:.2f} ({diff/price*100:.1f}%) to go")
+                parts.append("↓ triggered" if diff <= 0 else f"↓ {curr}{diff:.2f} ({diff/price*100:.1f}%) to go")
             distances[alarm_id] = " · ".join(parts) or None
 
     return render_template("dashboard.html", alarms=alarms, prices=prices, sort=sort,
@@ -215,32 +222,6 @@ def alarm_toggle(alarm_id):
     return redirect(url_for("dashboard"))
 
 
-# --- Duplicate alarm ---
-
-@app.route("/alarm/<alarm_id>/duplicate", methods=["POST"])
-@login_required
-def alarm_duplicate(alarm_id):
-    import uuid
-    alarms = read_alarms()
-    src = next((a for a in alarms if a.get("id") == alarm_id), None)
-    if src is None:
-        return redirect(url_for("dashboard"))
-    new_alarm = dict(src)
-    new_alarm["id"] = str(uuid.uuid4())[:8]
-    new_alarm["enabled"] = False
-    new_alarm["last_triggered"] = None
-    new_alarm["history"] = []
-    new_alarm["base_price"] = None
-    new_alarm["created_at"] = datetime.now(timezone.utc).isoformat()
-    try:
-        new_alarm["initial_price"] = checker.get_price(src["ticker"])
-    except Exception:
-        new_alarm["initial_price"] = src.get("initial_price")
-    def do_append(alarms):
-        alarms.append(new_alarm)
-    modify_alarms(do_append)
-    return redirect(url_for("dashboard"))
-
 
 # --- Test email ---
 
@@ -257,7 +238,10 @@ def alarm_test_email(alarm_id):
         return jsonify({"error": "Alarm not found"}), 404
     ticker = alarm.get("ticker", "?")
     try:
-        price = checker.get_price(ticker)
+        if alarm.get("source") == "tase":
+            price = tase.get_price(alarm["tase_id"], alarm["tase_type"])
+        else:
+            price = checker.get_price(ticker)
     except Exception:
         price = None
     price_str = f"${price:.2f}" if price is not None else "unavailable"
@@ -338,6 +322,15 @@ def city_search():
     # Prioritize prefix matches
     matches.sort(key=lambda c: (not c["city"].lower().startswith(q), c["city"]))
     return jsonify(matches[:8])
+
+
+@app.route("/api/tase-search")
+@login_required
+def tase_search():
+    q = request.args.get("q", "").strip()
+    if len(q) < 2:
+        return jsonify([])
+    return jsonify(tase.search(q, _tase_cache))
 
 
 @app.route("/timezone-to-city")
