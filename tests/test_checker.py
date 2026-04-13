@@ -372,3 +372,45 @@ def test_history_appended_after_pct_alarm_triggers(monkeypatch, tmp_path):
     assert entry["type"] == "upper_pct"
     assert entry["price"] == 110.0
     assert entry["threshold"] == 5.0
+
+
+from checker import format_subject, format_body, format_subject_pct, format_body_pct
+
+
+def test_format_subject_default_currency():
+    result = format_subject("AAPL", 150.00, "upper", 149.00)
+    assert "$150.00" in result
+    assert "$149.00" in result
+
+
+def test_format_subject_shekel_currency():
+    result = format_subject("ELTR", 185.30, "upper", 180.00, currency="₪")
+    assert "₪185.30" in result
+    assert "₪180.00" in result
+    assert "$" not in result
+
+
+def test_format_body_default_currency():
+    result = format_body("AAPL", 150.00, "upper", 149.00)
+    assert "$150.00" in result
+    assert "$149.00" in result
+
+
+def test_format_body_shekel_currency():
+    result = format_body("ELTR", 185.30, "upper", 180.00, currency="₪")
+    assert "₪185.30" in result
+    assert "₪180.00" in result
+    assert "$" not in result
+
+
+def test_format_body_pct_default_currency():
+    result = format_body_pct("AAPL", 155.0, "upper_pct", 5.0, 150.0, 3.33)
+    assert "$155.00" in result
+    assert "$150.00" in result
+
+
+def test_format_body_pct_shekel_currency():
+    result = format_body_pct("ELTR", 190.0, "upper_pct", 5.0, 180.0, 5.56, currency="₪")
+    assert "₪190.00" in result
+    assert "₪180.00" in result
+    assert "$" not in result

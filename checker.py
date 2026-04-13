@@ -8,6 +8,7 @@ import urllib.error
 import urllib.request
 
 import yfinance as yf
+import tase
 
 
 def _local_time_str(tz_name: str | None) -> str:
@@ -63,36 +64,36 @@ def should_alert(alarm: dict) -> bool:
     return datetime.now(timezone.utc) - last_dt >= timedelta(hours=snooze_hours)
 
 
-def format_subject(ticker: str, price: float, limit_type: str, limit_value: float) -> str:
-    return f"Stock Alert: {ticker} hit ${price:.2f} ({limit_type} limit: ${limit_value:.2f})"
+def format_subject(ticker: str, price: float, limit_type: str, limit_value: float, currency: str = "$") -> str:
+    return f"Stock Alert: {ticker} hit {currency}{price:.2f} ({limit_type} limit: {currency}{limit_value:.2f})"
 
 
-def format_body(ticker: str, price: float, limit_type: str, limit_value: float, tz_name: str | None = None) -> str:
+def format_body(ticker: str, price: float, limit_type: str, limit_value: float, tz_name: str | None = None, currency: str = "$") -> str:
     now = _local_time_str(tz_name)
     return (
         f"Stock Alert\n\n"
         f"Ticker: {ticker}\n"
-        f"Current Price: ${price:.2f}\n"
-        f"Limit Triggered: {limit_type} limit (${limit_value:.2f})\n"
+        f"Current Price: {currency}{price:.2f}\n"
+        f"Limit Triggered: {limit_type} limit ({currency}{limit_value:.2f})\n"
         f"Time: {now}\n\n"
         f"To disable this alarm, set \"enabled\": false in alarms.json and push to GitHub."
     )
 
 
-def format_subject_pct(ticker: str, price: float, direction: str, pct_threshold: float, actual_pct: float) -> str:
+def format_subject_pct(ticker: str, price: float, direction: str, pct_threshold: float, actual_pct: float, currency: str = "$") -> str:
     sign = "+" if actual_pct >= 0 else ""
     return f"Stock Alert: {ticker} moved {sign}{actual_pct:.1f}% (threshold: {pct_threshold:.1f}%)"
 
 
-def format_body_pct(ticker: str, price: float, direction: str, pct_threshold: float, base_price: float, actual_pct: float, tz_name: str | None = None) -> str:
+def format_body_pct(ticker: str, price: float, direction: str, pct_threshold: float, base_price: float, actual_pct: float, tz_name: str | None = None, currency: str = "$") -> str:
     now = _local_time_str(tz_name)
     sign = "+" if actual_pct >= 0 else ""
     direction_label = "risen" if direction == "upper_pct" else "fallen"
     return (
         f"Stock Alert\n\n"
         f"Ticker: {ticker}\n"
-        f"Current Price: ${price:.2f}\n"
-        f"Base Price: ${base_price:.2f}\n"
+        f"Current Price: {currency}{price:.2f}\n"
+        f"Base Price: {currency}{base_price:.2f}\n"
         f"Change: {sign}{actual_pct:.2f}% ({direction_label})\n"
         f"Threshold: {pct_threshold:.1f}%\n"
         f"Time: {now}\n\n"
@@ -192,9 +193,13 @@ def run(path: str = None) -> None:
             print(f"[ERROR] Alarm {alarm.get('id', '?')} is missing required field 'ticker', skipping")
             continue
 
+        currency = "₪" if alarm.get("source") == "tase" else "$"
         try:
-            price = get_price(ticker)
-            print(f"[FETCH] {ticker}: ${price:.2f}")
+            if alarm.get("source") == "tase":
+                price = tase.get_price(alarm["tase_id"], alarm["tase_type"])
+            else:
+                price = get_price(ticker)
+            print(f"[FETCH] {ticker}: {currency}{price:.2f}")
         except Exception as e:
             print(f"[ERROR] Could not fetch price for {ticker}: {e}")
             continue
@@ -214,8 +219,8 @@ def run(path: str = None) -> None:
             if triggered:
                 if should_alert(alarm):
                     pct_threshold = alarm.get("upper_pct") if direction == "upper_pct" else alarm.get("lower_pct")
-                    subject = format_subject_pct(ticker, price, direction, pct_threshold, actual_pct)
-                    body = format_body_pct(ticker, price, direction, pct_threshold, alarm["base_price"], actual_pct, tz_name=tz_name)
+                    subject = format_subject_pct(ticker, price, direction, pct_threshold, actual_pct, currency=currency)
+                    body = format_body_pct(ticker, price, direction, pct_threshold, alarm["base_price"], actual_pct, tz_name=tz_name, currency=currency)
                     try:
                         send_email(subject, body, alarm["email"], api_key, sender)
                         alarm["last_triggered"] = datetime.now(timezone.utc).isoformat()
@@ -250,8 +255,8 @@ def run(path: str = None) -> None:
 
             if triggered:
                 if should_alert(alarm):
-                    subject = format_subject(ticker, price, limit_type, limit_value)
-                    body = format_body(ticker, price, limit_type, limit_value, tz_name=tz_name)
+                    subject = format_subject(ticker, price, limit_type, limit_value, currency=currency)
+                    body = format_body(ticker, price, limit_type, limit_value, tz_name=tz_name, currency=currency)
                     try:
                         send_email(subject, body, alarm["email"], api_key, sender)
                         alarm["last_triggered"] = datetime.now(timezone.utc).isoformat()
