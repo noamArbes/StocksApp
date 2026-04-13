@@ -85,3 +85,47 @@ def test_search_empty_cache():
 def test_search_no_match():
     import tase
     assert tase.search("zzznomatch", SAMPLE_CACHE) == []
+
+
+def _fake_urlopen_prices(url_or_req, *args, **kwargs):
+    url = url_or_req.full_url if hasattr(url_or_req, "full_url") else str(url_or_req)
+    mock_resp = MagicMock()
+    mock_resp.__enter__ = lambda s: s
+    mock_resp.__exit__ = MagicMock(return_value=False)
+    if "fund/details" in url:
+        mock_resp.read.return_value = json.dumps({"UnitValuePrice": 126.49}).encode()
+    else:
+        mock_resp.read.return_value = json.dumps({"LastRate": 185.30}).encode()
+    return mock_resp
+
+
+def test_get_price_fund_returns_unit_value():
+    import tase
+    with patch("urllib.request.urlopen", side_effect=_fake_urlopen_prices):
+        price = tase.get_price("5118393", "fund")
+    assert price == 126.49
+
+
+def test_get_price_security_returns_last_rate():
+    import tase
+    with patch("urllib.request.urlopen", side_effect=_fake_urlopen_prices):
+        price = tase.get_price("1175819", "security")
+    assert price == 185.30
+
+
+def test_get_price_raises_value_error_when_price_is_none():
+    import tase
+    mock_resp = MagicMock()
+    mock_resp.__enter__ = lambda s: s
+    mock_resp.__exit__ = MagicMock(return_value=False)
+    mock_resp.read.return_value = json.dumps({"UnitValuePrice": None}).encode()
+    with patch("urllib.request.urlopen", return_value=mock_resp):
+        with pytest.raises(ValueError, match="not available"):
+            tase.get_price("5118393", "fund")
+
+
+def test_get_price_raises_value_error_on_network_error():
+    import tase
+    with patch("urllib.request.urlopen", side_effect=Exception("connection refused")):
+        with pytest.raises(ValueError):
+            tase.get_price("1175819", "security")

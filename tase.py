@@ -56,3 +56,30 @@ def search(query: str, cache: list[dict]) -> list[dict]:
             if len(results) == 10:
                 break
     return results
+
+
+def get_price(tase_id: str, tase_type: str) -> float:
+    """Fetch current price from TASE API.
+    Raises ValueError if price is unavailable or request fails."""
+    if tase_type == "fund":
+        url = f"https://mayaapi.tase.co.il/api/fund/details?fundId={tase_id}"
+        req = urllib.request.Request(url, headers=_MAYA_HEADERS)
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read())
+        except Exception as e:
+            raise ValueError(f"Could not fetch fund price for {tase_id}: {e}") from e
+        price = data.get("UnitValuePrice")
+    else:
+        url = f"https://api.tase.co.il/api/company/securitydata?securityId={tase_id}&lang=1"
+        req = urllib.request.Request(url, headers=_BASE_HEADERS)
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read())
+        except Exception as e:
+            raise ValueError(f"Could not fetch security price for {tase_id}: {e}") from e
+        price = data.get("LastRate")
+
+    if price is None:
+        raise ValueError(f"Price not available for TASE id {tase_id}")
+    return float(price)
