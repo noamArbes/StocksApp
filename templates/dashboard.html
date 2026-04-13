@@ -101,7 +101,7 @@
                 {% if entry.type in ('upper_limit', 'lower_limit', 'upper', 'lower') %}
                     {{ entry.type.replace('_', ' ') }} {{ curr }}{{ "%.2f"|format(entry.threshold) }} hit at {{ curr }}{{ "%.2f"|format(entry.price) }}
                 {% else %}
-                    {{ entry.type.replace('_', ' ') }} {{ "%.1f"|format(entry.threshold) }}% at ${{ "%.2f"|format(entry.price) }}
+                    {{ entry.type.replace('_', ' ') }} {{ "%.1f"|format(entry.threshold) }}% at {{ curr }}{{ "%.2f"|format(entry.price) }}
                 {% endif %}
             </li>
             {% endfor %}
