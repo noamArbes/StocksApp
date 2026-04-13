@@ -4,10 +4,30 @@
     <h2>{{ title }}</h2>
     {% if error %}<p class="error">{{ error }}</p>{% endif %}
     <form method="post" id="alarm-form">
-        <label id="label-ticker">Ticker
+        {% set is_tase = form.get('source') == 'tase' %}
+
+        {% if not alarm %}
+        <div class="market-toggle" id="market-toggle">
+            <button type="button" class="btn {% if not is_tase %}btn-primary{% endif %}" id="toggle-us">US (Yahoo Finance)</button>
+            <button type="button" class="btn {% if is_tase %}btn-primary{% endif %}" id="toggle-il">Israeli (TASE)</button>
+        </div>
+        {% else %}
+        <div class="market-toggle">
+            <button type="button" class="btn {% if not is_tase %}btn-primary{% endif %}" disabled>US (Yahoo Finance)</button>
+            <button type="button" class="btn {% if is_tase %}btn-primary{% endif %}" disabled>Israeli (TASE)</button>
+        </div>
+        {% endif %}
+
+        <input type="hidden" name="source" id="source-hidden" value="{{ form.get('source', 'yfinance') }}">
+        <input type="hidden" name="tase_id" id="tase-id-hidden" value="{{ form.get('tase_id', '') }}">
+        <input type="hidden" name="tase_type" id="tase-type-hidden" value="{{ form.get('tase_type', '') }}">
+
+        <label id="label-ticker">
+            <span id="ticker-label-text">{% if is_tase %}Search Israeli Security{% else %}Ticker{% endif %}</span>
             <input type="text" name="ticker" id="ticker-input"
                 value="{{ form.get('ticker', '') }}"
-                placeholder="e.g. AAPL" autocomplete="off"
+                placeholder="{% if is_tase %}e.g. מגדל or Migdal{% else %}e.g. AAPL{% endif %}"
+                autocomplete="off"
                 {% if alarm %}readonly{% endif %}>
             {% if not alarm %}
             <div class="autocomplete-dropdown" id="ticker-dropdown"></div>
@@ -31,13 +51,13 @@
             <label id="label-price-limit">At least one price limit required
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:0.25rem">
                     <div>
-                        <span style="font-size:0.82rem;color:#7a6a5a">Upper Limit ($) — optional</span>
+                        <span style="font-size:0.82rem;color:#7a6a5a">Upper Limit (<span class="curr-symbol">$</span>) — optional</span>
                         <input type="number" step="0.01" name="upper_limit"
                             value="{{ form.get('upper_limit', '') }}"
                             placeholder="e.g. 300.00">
                     </div>
                     <div>
-                        <span style="font-size:0.82rem;color:#7a6a5a">Lower Limit ($) — optional</span>
+                        <span style="font-size:0.82rem;color:#7a6a5a">Lower Limit (<span class="curr-symbol">$</span>) — optional</span>
                         <input type="number" step="0.01" name="lower_limit"
                             value="{{ form.get('lower_limit', '') }}"
                             placeholder="e.g. 50.00">
@@ -64,6 +84,15 @@
                 </div>
             </label>
         </div>
+
+        <label id="label-ref-price">Reference Price — optional
+            <span style="font-size:0.82rem;color:#7a6a5a" id="ref-price-hint">
+                Leave blank to use the current market price at creation time.
+            </span>
+            <input type="number" step="0.01" name="reference_price" id="reference-price-input"
+                value="{{ form.get('reference_price', '') }}"
+                placeholder="e.g. 150.00">
+        </label>
 
         <label id="label-email">Email(s) — comma-separated for multiple
             <input type="text" name="email" id="email-input"
@@ -166,15 +195,70 @@ function makeAutocomplete(input, dropdown, fetchFn, onSelect) {
     });
 }
 
-// ── Ticker autocomplete (new alarm only) ─────────────────────
+// ── Ticker / TASE autocomplete ───────────────────────────────
 const tickerInput = document.getElementById('ticker-input');
 const tickerDropdown = document.getElementById('ticker-dropdown');
+const sourceHidden = document.getElementById('source-hidden');
+const taseIdHidden = document.getElementById('tase-id-hidden');
+const taseTypeHidden = document.getElementById('tase-type-hidden');
+const tickerLabelText = document.getElementById('ticker-label-text');
+
+// ── Market toggle ────────────────────────────────────────────
+const toggleUs = document.getElementById('toggle-us');
+const toggleIl = document.getElementById('toggle-il');
+
+function setMarket(market) {
+    const isTase = market === 'tase';
+    if (sourceHidden) sourceHidden.value = isTase ? 'tase' : 'yfinance';
+    if (toggleUs) {
+        toggleUs.classList.toggle('btn-primary', !isTase);
+        toggleIl.classList.toggle('btn-primary', isTase);
+    }
+    if (tickerLabelText) tickerLabelText.textContent = isTase ? 'Search Israeli Security' : 'Ticker';
+    if (tickerInput) tickerInput.placeholder = isTase ? 'e.g. מגדל or Migdal' : 'e.g. AAPL';
+    if (tickerInput) tickerInput.value = '';
+    if (taseIdHidden) { taseIdHidden.value = ''; taseTypeHidden.value = ''; }
+    document.querySelectorAll('.curr-symbol').forEach(el => { el.textContent = isTase ? '₪' : '$'; });
+}
+
+if (toggleUs) {
+    toggleUs.addEventListener('click', () => setMarket('yfinance'));
+    toggleIl.addEventListener('click', () => setMarket('tase'));
+}
+
+// Apply initial currency symbol based on current source on page load
+(function() {
+    if (sourceHidden && sourceHidden.value === 'tase') {
+        document.querySelectorAll('.curr-symbol').forEach(el => { el.textContent = '₪'; });
+    }
+})();
+
 if (tickerDropdown) {
     makeAutocomplete(tickerInput, tickerDropdown,
-        q => fetch('/ticker-search?q=' + encodeURIComponent(q)).then(r => r.json()).then(items =>
-            items.map(i => ({ label: i.symbol + ' — ' + i.name, value: i.symbol }))
-        ),
-        item => { tickerInput.value = item.value; }
+        q => {
+            const isTase = sourceHidden && sourceHidden.value === 'tase';
+            if (isTase) {
+                return fetch('/api/tase-search?q=' + encodeURIComponent(q))
+                    .then(r => r.json())
+                    .then(items => items.map(i => ({
+                        label: i.name + (i.ticker ? ' (' + i.ticker + ')' : '') + ' — ' + (i.type === 'fund' ? 'Fund' : 'Stock/ETF'),
+                        value: i.name,
+                        taseId: i.id,
+                        taseType: i.type,
+                    })));
+            } else {
+                return fetch('/ticker-search?q=' + encodeURIComponent(q))
+                    .then(r => r.json())
+                    .then(items => items.map(i => ({ label: i.symbol + ' — ' + i.name, value: i.symbol })));
+            }
+        },
+        item => {
+            tickerInput.value = item.value;
+            if (item.taseId && taseIdHidden) {
+                taseIdHidden.value = item.taseId;
+                taseTypeHidden.value = item.taseType;
+            }
+        }
     );
 }
 
