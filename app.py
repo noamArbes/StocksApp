@@ -391,6 +391,7 @@ def _alarm_from_form(form, existing=None):
         "id": existing["id"] if existing else str(uuid.uuid4())[:8],
         "ticker": ticker,
         "enabled": form.get("enabled") == "on",
+        "owned": form.get("owned") == "on",
         "timezone": tz,
         "snooze_hours": snooze_hours,
         "notes": notes or None,

@@ -127,6 +127,12 @@
             Enabled
         </label>
 
+        <label class="checkbox-label">
+            <input type="checkbox" name="owned"
+                {% if form.get('owned') %}checked{% endif %}>
+            I own this security
+        </label>
+
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">Save</button>
             <a href="{{ url_for('dashboard') }}" class="btn">Cancel</a>

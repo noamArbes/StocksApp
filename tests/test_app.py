@@ -136,6 +136,35 @@ def test_alarm_from_form_pct():
     assert alarm.get("base_price") is None
 
 
+def test_alarm_from_form_owned_on():
+    from app import _alarm_from_form
+    from werkzeug.datastructures import ImmutableMultiDict
+    form = ImmutableMultiDict([
+        ("ticker", "AAPL"), ("alarm_type", "price"),
+        ("upper_limit", "200"), ("lower_limit", ""),
+        ("email", "a@b.com"), ("timezone", "America/New_York"),
+        ("enabled", "on"), ("owned", "on"),
+    ])
+    alarm, error = _alarm_from_form(form)
+    assert error is None
+    assert alarm["owned"] is True
+
+
+def test_alarm_from_form_owned_off():
+    from app import _alarm_from_form
+    from werkzeug.datastructures import ImmutableMultiDict
+    form = ImmutableMultiDict([
+        ("ticker", "AAPL"), ("alarm_type", "price"),
+        ("upper_limit", "200"), ("lower_limit", ""),
+        ("email", "a@b.com"), ("timezone", "America/New_York"),
+        ("enabled", "on"),
+        # "owned" checkbox not submitted = False
+    ])
+    alarm, error = _alarm_from_form(form)
+    assert error is None
+    assert alarm["owned"] is False
+
+
 def test_create_alarm_via_post(client, tmp_path, monkeypatch):
     import app as app_module
     alarms_file = tmp_path / "alarms3.json"
