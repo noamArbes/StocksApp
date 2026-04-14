@@ -554,3 +554,89 @@ def test_toggle_owned_requires_login(client):
     resp = client.post("/alarm/any/toggle-owned")
     assert resp.status_code == 302
     assert "dashboard" not in resp.headers["Location"]
+
+
+def test_dashboard_owned_filter_shows_only_owned(client, tmp_path, monkeypatch):
+    import app as app_module
+    alarms = [
+        {"id": "f1", "ticker": "AAPL", "enabled": True, "upper_limit": 200.0,
+         "lower_limit": None, "email": "a@b.com", "last_triggered": None, "timezone": None,
+         "owned": True, "created_at": "2026-04-01T00:00:00+00:00"},
+        {"id": "f2", "ticker": "TSLA", "enabled": True, "upper_limit": 100.0,
+         "lower_limit": None, "email": "a@b.com", "last_triggered": None, "timezone": None,
+         "owned": False, "created_at": "2026-04-02T00:00:00+00:00"},
+    ]
+    alarms_file = tmp_path / "alarms_filter1.json"
+    alarms_file.write_text(json.dumps(alarms))
+    monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
+    monkeypatch.setattr("checker.get_price", lambda t: 42.0)
+    login(client)
+    resp = client.get("/dashboard?owned=owned")
+    assert resp.status_code == 200
+    body = resp.data.decode()
+    assert "AAPL" in body
+    assert "TSLA" not in body
+
+
+def test_dashboard_owned_filter_shows_only_watching(client, tmp_path, monkeypatch):
+    import app as app_module
+    alarms = [
+        {"id": "f3", "ticker": "AAPL", "enabled": True, "upper_limit": 200.0,
+         "lower_limit": None, "email": "a@b.com", "last_triggered": None, "timezone": None,
+         "owned": True, "created_at": "2026-04-01T00:00:00+00:00"},
+        {"id": "f4", "ticker": "TSLA", "enabled": True, "upper_limit": 100.0,
+         "lower_limit": None, "email": "a@b.com", "last_triggered": None, "timezone": None,
+         "owned": False, "created_at": "2026-04-02T00:00:00+00:00"},
+    ]
+    alarms_file = tmp_path / "alarms_filter2.json"
+    alarms_file.write_text(json.dumps(alarms))
+    monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
+    monkeypatch.setattr("checker.get_price", lambda t: 42.0)
+    login(client)
+    resp = client.get("/dashboard?owned=watching")
+    assert resp.status_code == 200
+    body = resp.data.decode()
+    assert "TSLA" in body
+    assert "AAPL" not in body
+
+
+def test_dashboard_owned_filter_all_shows_all(client, tmp_path, monkeypatch):
+    import app as app_module
+    alarms = [
+        {"id": "f5", "ticker": "AAPL", "enabled": True, "upper_limit": 200.0,
+         "lower_limit": None, "email": "a@b.com", "last_triggered": None, "timezone": None,
+         "owned": True, "created_at": "2026-04-01T00:00:00+00:00"},
+        {"id": "f6", "ticker": "TSLA", "enabled": True, "upper_limit": 100.0,
+         "lower_limit": None, "email": "a@b.com", "last_triggered": None, "timezone": None,
+         "owned": False, "created_at": "2026-04-02T00:00:00+00:00"},
+    ]
+    alarms_file = tmp_path / "alarms_filter3.json"
+    alarms_file.write_text(json.dumps(alarms))
+    monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
+    monkeypatch.setattr("checker.get_price", lambda t: 42.0)
+    login(client)
+    resp = client.get("/dashboard?owned=all")
+    assert resp.status_code == 200
+    body = resp.data.decode()
+    assert "AAPL" in body
+    assert "TSLA" in body
+
+
+def test_dashboard_owned_filter_legacy_alarm_treated_as_watching(client, tmp_path, monkeypatch):
+    import app as app_module
+    # Alarm with no 'owned' key at all (pre-feature alarm)
+    alarms = [{"id": "f7", "ticker": "WDC", "enabled": True, "upper_limit": 100.0,
+               "lower_limit": None, "email": "a@b.com", "last_triggered": None, "timezone": None,
+               "created_at": "2026-04-01T00:00:00+00:00"}]
+    alarms_file = tmp_path / "alarms_filter4.json"
+    alarms_file.write_text(json.dumps(alarms))
+    monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
+    monkeypatch.setattr("checker.get_price", lambda t: 42.0)
+    login(client)
+    # With ?owned=watching, legacy alarm (no 'owned' key) should appear
+    resp = client.get("/dashboard?owned=watching")
+    assert resp.status_code == 200
+    assert b"WDC" in resp.data
+    # With ?owned=owned, it should NOT appear
+    resp2 = client.get("/dashboard?owned=owned")
+    assert b"WDC" not in resp2.data

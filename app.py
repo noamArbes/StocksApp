@@ -101,6 +101,11 @@ def dashboard():
         alarms.sort(key=lambda a: a.get("ticker", ""))
     else:
         alarms.sort(key=lambda a: a.get("created_at") or "", reverse=True)
+    owned_filter = request.args.get("owned", "all")
+    if owned_filter == "owned":
+        alarms = [a for a in alarms if a.get("owned", False)]
+    elif owned_filter == "watching":
+        alarms = [a for a in alarms if not a.get("owned", False)]
     prices = {}
     for alarm in alarms:
         ticker = alarm.get("ticker")
@@ -158,7 +163,8 @@ def dashboard():
             distances[alarm_id] = " · ".join(parts) or None
 
     return render_template("dashboard.html", alarms=alarms, prices=prices, sort=sort,
-                           triggered=triggered, distances=distances, price_changes=price_changes)
+                           triggered=triggered, distances=distances, price_changes=price_changes,
+                           owned_filter=owned_filter)
 
 
 # --- Alarm CRUD ---
