@@ -6,12 +6,19 @@
 </div>
 
 <div class="sort-controls">
-    <a href="{{ url_for('dashboard', sort='newest') }}"
+    <a href="{{ url_for('dashboard', sort='newest', owned=owned_filter if owned_filter != 'all' else None) }}"
        class="btn {% if sort == 'newest' %}btn-primary{% endif %}">Newest</a>
-    <a href="{{ url_for('dashboard', sort='oldest') }}"
+    <a href="{{ url_for('dashboard', sort='oldest', owned=owned_filter if owned_filter != 'all' else None) }}"
        class="btn {% if sort == 'oldest' %}btn-primary{% endif %}">Oldest</a>
-    <a href="{{ url_for('dashboard', sort='az') }}"
+    <a href="{{ url_for('dashboard', sort='az', owned=owned_filter if owned_filter != 'all' else None) }}"
        class="btn {% if sort == 'az' %}btn-primary{% endif %}">A–Z</a>
+    <span class="sort-sep">|</span>
+    <a href="{{ url_for('dashboard', sort=sort) }}"
+       class="btn {% if owned_filter == 'all' %}btn-primary{% endif %}">All</a>
+    <a href="{{ url_for('dashboard', sort=sort, owned='owned') }}"
+       class="btn {% if owned_filter == 'owned' %}btn-primary{% endif %}">Owned</a>
+    <a href="{{ url_for('dashboard', sort=sort, owned='watching') }}"
+       class="btn {% if owned_filter == 'watching' %}btn-primary{% endif %}">Watching</a>
 </div>
 
 <div class="search-bar">
@@ -31,6 +38,11 @@
         <form method="post" action="/alarm/{{ alarm.id }}/toggle" style="display:inline">
             <button type="submit" class="toggle {{ 'toggle-on' if alarm.enabled else 'toggle-off' }}">
                 {{ "ON" if alarm.enabled else "OFF" }}
+            </button>
+        </form>
+        <form method="post" action="/alarm/{{ alarm.id }}/toggle-owned?sort={{ sort }}&owned={{ owned_filter }}" style="display:inline">
+            <button type="submit" class="btn btn-owned {% if alarm.get('owned') %}btn-owned-yes{% else %}btn-owned-no{% endif %}">
+                {{ "Owned" if alarm.get('owned') else "Watching" }}
             </button>
         </form>
     </div>
