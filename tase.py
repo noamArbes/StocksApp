@@ -45,13 +45,15 @@ def load_securities_cache() -> list[dict]:
 
 
 def search(query: str, cache: list[dict]) -> list[dict]:
-    """Case-insensitive substring search on name and ticker. Returns top 10 matches."""
+    """Case-insensitive substring search on name, ticker, and (if all-digit) numeric ID.
+    Returns top 10 matches."""
     q = query.lower()
     results = []
     for item in cache:
         name_match = q in item["name"].lower()
         ticker_match = item["ticker"] is not None and q in item["ticker"].lower()
-        if name_match or ticker_match:
+        id_match = query.isdigit() and query in item["id"]
+        if name_match or ticker_match or id_match:
             results.append(item)
             if len(results) == 10:
                 break

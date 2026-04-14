@@ -87,6 +87,38 @@ def test_search_no_match():
     assert tase.search("zzznomatch", SAMPLE_CACHE) == []
 
 
+def test_search_matches_numeric_id_exact():
+    import tase
+    results = tase.search("1175819", SAMPLE_CACHE)
+    assert len(results) == 1
+    assert results[0]["id"] == "1175819"
+
+
+def test_search_matches_numeric_id_partial():
+    import tase
+    # "1200" is a substring of "1200001" and "1175819" — only "1200001" starts with it
+    # but "120" is a substring of "1200001" only
+    results = tase.search("120", SAMPLE_CACHE)
+    assert len(results) == 1
+    assert results[0]["id"] == "1200001"
+
+
+def test_search_non_digit_query_does_not_match_id():
+    import tase
+    # "1175" is a substring of id "1175819" — but query contains only digits
+    # this test verifies a mixed query (letters+digits) doesn't match by id
+    results = tase.search("abc123", SAMPLE_CACHE)
+    assert results == []
+
+
+def test_search_digit_query_still_matches_name():
+    import tase
+    # If a security happened to have a digit sequence in its name, it should match
+    cache = [{"id": "9999", "name": "Fund 2025 Series", "ticker": None, "type": "fund"}]
+    results = tase.search("2025", cache)
+    assert len(results) == 1
+
+
 def _fake_urlopen_prices(url_or_req, *args, **kwargs):
     url = url_or_req.full_url if hasattr(url_or_req, "full_url") else str(url_or_req)
     mock_resp = MagicMock()
