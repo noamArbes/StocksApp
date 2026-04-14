@@ -486,3 +486,71 @@ def test_create_tase_alarm_missing_tase_id_returns_error(client):
     })
     assert resp.status_code == 200
     assert b"select a security" in resp.data
+
+
+def test_toggle_owned_flips_false_to_true(client, tmp_path, monkeypatch):
+    import app as app_module
+    alarms = [{"id": "own1", "ticker": "AAPL", "enabled": True, "upper_limit": 200.0,
+               "lower_limit": None, "email": "a@b.com", "last_triggered": None, "timezone": None,
+               "owned": False}]
+    alarms_file = tmp_path / "alarms_own1.json"
+    alarms_file.write_text(json.dumps(alarms))
+    monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
+    login(client)
+    resp = client.post("/alarm/own1/toggle-owned")
+    assert resp.status_code == 302
+    saved = json.loads(alarms_file.read_text())
+    assert saved[0]["owned"] is True
+
+
+def test_toggle_owned_flips_true_to_false(client, tmp_path, monkeypatch):
+    import app as app_module
+    alarms = [{"id": "own2", "ticker": "AAPL", "enabled": True, "upper_limit": 200.0,
+               "lower_limit": None, "email": "a@b.com", "last_triggered": None, "timezone": None,
+               "owned": True}]
+    alarms_file = tmp_path / "alarms_own2.json"
+    alarms_file.write_text(json.dumps(alarms))
+    monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
+    login(client)
+    resp = client.post("/alarm/own2/toggle-owned")
+    assert resp.status_code == 302
+    saved = json.loads(alarms_file.read_text())
+    assert saved[0]["owned"] is False
+
+
+def test_toggle_owned_defaults_missing_field_to_true(client, tmp_path, monkeypatch):
+    import app as app_module
+    # Alarm with no 'owned' field at all (legacy alarm)
+    alarms = [{"id": "own3", "ticker": "AAPL", "enabled": True, "upper_limit": 200.0,
+               "lower_limit": None, "email": "a@b.com", "last_triggered": None, "timezone": None}]
+    alarms_file = tmp_path / "alarms_own3.json"
+    alarms_file.write_text(json.dumps(alarms))
+    monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
+    login(client)
+    resp = client.post("/alarm/own3/toggle-owned")
+    assert resp.status_code == 302
+    saved = json.loads(alarms_file.read_text())
+    # Missing owned defaults to False, so flipping gives True
+    assert saved[0]["owned"] is True
+
+
+def test_toggle_owned_preserves_query_params(client, tmp_path, monkeypatch):
+    import app as app_module
+    alarms = [{"id": "own4", "ticker": "AAPL", "enabled": True, "upper_limit": 200.0,
+               "lower_limit": None, "email": "a@b.com", "last_triggered": None, "timezone": None,
+               "owned": False}]
+    alarms_file = tmp_path / "alarms_own4.json"
+    alarms_file.write_text(json.dumps(alarms))
+    monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
+    login(client)
+    resp = client.post("/alarm/own4/toggle-owned?sort=az&owned=owned")
+    assert resp.status_code == 302
+    location = resp.headers["Location"]
+    assert "sort=az" in location
+    assert "owned=owned" in location
+
+
+def test_toggle_owned_requires_login(client):
+    resp = client.post("/alarm/any/toggle-owned")
+    assert resp.status_code == 302
+    assert "dashboard" not in resp.headers["Location"]

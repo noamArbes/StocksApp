@@ -222,6 +222,24 @@ def alarm_toggle(alarm_id):
     return redirect(url_for("dashboard"))
 
 
+@app.route("/alarm/<alarm_id>/toggle-owned", methods=["POST"])
+@login_required
+def alarm_toggle_owned(alarm_id):
+    def do_toggle(alarms):
+        for alarm in alarms:
+            if alarm.get("id") == alarm_id:
+                alarm["owned"] = not alarm.get("owned", False)
+                break
+    modify_alarms(do_toggle)
+    sort = request.args.get("sort", "")
+    owned = request.args.get("owned", "")
+    params = {}
+    if sort:
+        params["sort"] = sort
+    if owned:
+        params["owned"] = owned
+    return redirect(url_for("dashboard", **params))
+
 
 # --- Test email ---
 
