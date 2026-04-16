@@ -138,9 +138,8 @@ def save_alarms(alarms: list, path: str) -> None:
 
 def get_trades_path() -> str:
     """Returns the path to trades.json — volume path on Railway, local path otherwise."""
-    data_dir = "/data"
-    if os.path.isdir(data_dir):
-        return os.path.join(data_dir, "trades.json")
+    if os.path.isdir("/data"):
+        return TRADES_VOLUME_PATH
     return TRADES_LOCAL_PATH
 
 
