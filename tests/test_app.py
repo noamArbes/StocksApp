@@ -640,3 +640,181 @@ def test_dashboard_owned_filter_legacy_alarm_treated_as_watching(client, tmp_pat
     # With ?owned=owned, it should NOT appear
     resp2 = client.get("/dashboard?owned=owned")
     assert b"WDC" not in resp2.data
+
+
+def test_alarm_from_form_shares_set():
+    from app import _alarm_from_form
+    from werkzeug.datastructures import ImmutableMultiDict
+    form = ImmutableMultiDict([
+        ("ticker", "WDC"), ("alarm_type", "price"), ("upper_limit", "200"),
+        ("email", "a@b.com"), ("timezone", "America/New_York"),
+        ("enabled", "on"), ("owned", "on"), ("shares", "20"),
+    ])
+    alarm, error = _alarm_from_form(form)
+    assert error is None
+    assert alarm["shares"] == 20
+
+
+def test_alarm_from_form_shares_blank():
+    from app import _alarm_from_form
+    from werkzeug.datastructures import ImmutableMultiDict
+    form = ImmutableMultiDict([
+        ("ticker", "WDC"), ("alarm_type", "price"), ("upper_limit", "200"),
+        ("email", "a@b.com"), ("timezone", "America/New_York"), ("enabled", "on"),
+    ])
+    alarm, error = _alarm_from_form(form)
+    assert error is None
+    assert alarm["shares"] is None
+
+
+def test_alarm_from_form_shares_invalid():
+    from app import _alarm_from_form
+    from werkzeug.datastructures import ImmutableMultiDict
+    form = ImmutableMultiDict([
+        ("ticker", "WDC"), ("alarm_type", "price"), ("upper_limit", "200"),
+        ("email", "a@b.com"), ("timezone", "America/New_York"),
+        ("enabled", "on"), ("owned", "on"), ("shares", "abc"),
+    ])
+    _, error = _alarm_from_form(form)
+    assert error == "Shares must be a whole number"
+
+
+def test_trade_from_form_valid():
+    from app import _trade_from_form
+    from werkzeug.datastructures import ImmutableMultiDict
+    form = ImmutableMultiDict([
+        ("ticker", "WDC"), ("source", "yfinance"),
+        ("shares", "20"), ("buy_price", "42.10"), ("buy_date", "2026-01-15"),
+        ("sell_price", "67.80"), ("sell_date", "2026-04-10"),
+    ])
+    trade, error = _trade_from_form(form)
+    assert error is None
+    assert trade["ticker"] == "WDC"
+    assert trade["shares"] == 20
+    assert trade["buy_price"] == 42.10
+    assert trade["sell_price"] == 67.80
+    assert trade["buy_date"] == "2026-01-15"
+    assert trade["sell_date"] == "2026-04-10"
+    assert trade["source"] == "yfinance"
+    assert "id" in trade
+    assert "created_at" in trade
+
+
+def test_trade_from_form_shares_optional():
+    from app import _trade_from_form
+    from werkzeug.datastructures import ImmutableMultiDict
+    form = ImmutableMultiDict([
+        ("ticker", "AAPL"), ("source", "yfinance"),
+        ("buy_price", "150.0"), ("buy_date", "2026-01-01"),
+        ("sell_price", "160.0"), ("sell_date", "2026-02-01"),
+    ])
+    trade, error = _trade_from_form(form)
+    assert error is None
+    assert trade["shares"] is None
+
+
+def test_trade_from_form_missing_ticker():
+    from app import _trade_from_form
+    from werkzeug.datastructures import ImmutableMultiDict
+    form = ImmutableMultiDict([
+        ("ticker", ""), ("buy_price", "42.0"), ("buy_date", "2026-01-01"),
+        ("sell_price", "50.0"), ("sell_date", "2026-02-01"),
+    ])
+    _, error = _trade_from_form(form)
+    assert error == "Ticker is required"
+
+
+def test_trade_from_form_missing_sell_price():
+    from app import _trade_from_form
+    from werkzeug.datastructures import ImmutableMultiDict
+    form = ImmutableMultiDict([
+        ("ticker", "WDC"), ("buy_price", "42.0"), ("buy_date", "2026-01-01"),
+        ("sell_price", ""), ("sell_date", "2026-02-01"),
+    ])
+    _, error = _trade_from_form(form)
+    assert error == "Sell price is required"
+
+
+def test_trade_from_form_missing_buy_date():
+    from app import _trade_from_form
+    from werkzeug.datastructures import ImmutableMultiDict
+    form = ImmutableMultiDict([
+        ("ticker", "WDC"), ("buy_price", "42.0"), ("buy_date", ""),
+        ("sell_price", "50.0"), ("sell_date", "2026-02-01"),
+    ])
+    _, error = _trade_from_form(form)
+    assert error == "Buy date is required"
+
+
+def test_trade_from_form_preserves_id_on_edit():
+    from app import _trade_from_form
+    from werkzeug.datastructures import ImmutableMultiDict
+    existing = {"id": "abc12345", "created_at": "2026-01-01T00:00:00+00:00"}
+    form = ImmutableMultiDict([
+        ("ticker", "WDC"), ("source", "yfinance"),
+        ("buy_price", "42.0"), ("buy_date", "2026-01-01"),
+        ("sell_price", "50.0"), ("sell_date", "2026-02-01"),
+    ])
+    trade, error = _trade_from_form(form, existing=existing)
+    assert error is None
+    assert trade["id"] == "abc12345"
+    assert trade["created_at"] == "2026-01-01T00:00:00+00:00"
+
+
+def test_create_trade_via_post(client, tmp_path, monkeypatch):
+    import app as app_module
+    trades_file = tmp_path / "trades.json"
+    monkeypatch.setattr(app_module, "_trades_path", lambda: str(trades_file))
+    login(client)
+    resp = client.post("/trade/new", data={
+        "ticker": "WDC", "source": "yfinance",
+        "shares": "20", "buy_price": "42.10", "buy_date": "2026-01-15",
+        "sell_price": "67.80", "sell_date": "2026-04-10",
+    })
+    assert resp.status_code == 302
+    assert "tab=history" in resp.headers["Location"]
+    saved = json.loads(trades_file.read_text())
+    assert len(saved) == 1
+    assert saved[0]["ticker"] == "WDC"
+
+
+def test_edit_trade_via_post(client, tmp_path, monkeypatch):
+    import app as app_module
+    trades = [{"id": "tr1", "ticker": "WDC", "source": "yfinance", "shares": 20,
+               "buy_price": 42.10, "buy_date": "2026-01-15",
+               "sell_price": 67.80, "sell_date": "2026-04-10",
+               "created_at": "2026-04-10T00:00:00+00:00"}]
+    trades_file = tmp_path / "trades_edit.json"
+    trades_file.write_text(json.dumps(trades))
+    monkeypatch.setattr(app_module, "_trades_path", lambda: str(trades_file))
+    login(client)
+    resp = client.post("/trade/tr1/edit", data={
+        "ticker": "WDC", "source": "yfinance",
+        "shares": "25", "buy_price": "42.10", "buy_date": "2026-01-15",
+        "sell_price": "70.00", "sell_date": "2026-04-11",
+    })
+    assert resp.status_code == 302
+    saved = json.loads(trades_file.read_text())
+    assert saved[0]["shares"] == 25
+    assert saved[0]["sell_price"] == 70.00
+
+
+def test_delete_trade(client, tmp_path, monkeypatch):
+    import app as app_module
+    trades = [{"id": "tr2", "ticker": "AAPL", "source": "yfinance", "shares": None,
+               "buy_price": 150.0, "buy_date": "2026-01-01",
+               "sell_price": 160.0, "sell_date": "2026-02-01",
+               "created_at": "2026-02-01T00:00:00+00:00"}]
+    trades_file = tmp_path / "trades_del.json"
+    trades_file.write_text(json.dumps(trades))
+    monkeypatch.setattr(app_module, "_trades_path", lambda: str(trades_file))
+    login(client)
+    resp = client.post("/trade/tr2/delete")
+    assert resp.status_code == 302
+    saved = json.loads(trades_file.read_text())
+    assert saved == []
+
+
+def test_trade_routes_require_login(client):
+    assert client.post("/trade/new").status_code == 302
+    assert client.post("/trade/abc/delete").status_code == 302

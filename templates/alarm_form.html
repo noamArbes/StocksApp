@@ -133,9 +133,17 @@
             I own this security
         </label>
 
+        <div id="shares-field" style="display:none">
+            <label>Number of shares — optional
+                <input type="number" step="1" min="1" name="shares"
+                    value="{{ form.get('shares') or '' }}"
+                    placeholder="e.g. 20">
+            </label>
+        </div>
+
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">Save</button>
-            <a href="{{ url_for('dashboard') }}" class="btn">Cancel</a>
+            <a href="{{ url_for('dashboard', sort=sort if sort else None, owned=owned_filter if owned_filter else None) }}" class="btn">Cancel</a>
             {% if alarm %}
             <button type="button" id="test-email-btn" class="btn" style="margin-left:auto">Send test email</button>
             {% endif %}
@@ -160,6 +168,15 @@ function updateFields() {
 }
 radios.forEach(r => r.addEventListener('change', updateFields));
 updateFields();
+
+// ── Owned / Shares toggle ────────────────────────────────────
+const ownedCheckbox = document.querySelector('[name=owned]');
+const sharesField = document.getElementById('shares-field');
+function updateSharesVisibility() {
+    sharesField.style.display = ownedCheckbox.checked ? '' : 'none';
+}
+ownedCheckbox.addEventListener('change', updateSharesVisibility);
+updateSharesVisibility();
 
 // ── Autocomplete helper ──────────────────────────────────────
 function makeAutocomplete(input, dropdown, fetchFn, onSelect) {

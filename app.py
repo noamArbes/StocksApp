@@ -409,6 +409,15 @@ def _alarm_from_form(form, existing=None):
         snooze_hours = 72
     notes = form.get("notes", "").strip()
 
+    shares_raw = form.get("shares", "").strip()
+    if shares_raw:
+        try:
+            shares = int(shares_raw)
+        except ValueError:
+            return None, "Shares must be a whole number"
+    else:
+        shares = None
+
     # Manual reference price (overrides live fetch for initial_price / base_price)
     ref_price_raw = form.get("reference_price", "").strip()
     manual_ref = None
@@ -423,6 +432,7 @@ def _alarm_from_form(form, existing=None):
         "ticker": ticker,
         "enabled": form.get("enabled") == "on",
         "owned": form.get("owned") == "on",
+        "shares": shares,
         "timezone": tz,
         "snooze_hours": snooze_hours,
         "notes": notes or None,
