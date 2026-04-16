@@ -103,6 +103,8 @@ def format_body_pct(ticker: str, price: float, direction: str, pct_threshold: fl
 
 VOLUME_PATH = "/data/alarms.json"
 LOCAL_PATH = "alarms.json"
+TRADES_LOCAL_PATH = "trades.json"
+TRADES_VOLUME_PATH = "/data/trades.json"
 
 
 def get_alarms_path() -> str:
@@ -130,6 +132,29 @@ def save_alarms(alarms: list, path: str) -> None:
     dir_name = os.path.dirname(path) or "."
     with tempfile.NamedTemporaryFile("w", dir=dir_name, delete=False, suffix=".tmp") as f:
         json.dump(alarms, f, indent=2)
+        tmp_path = f.name
+    os.replace(tmp_path, path)
+
+
+def get_trades_path() -> str:
+    """Returns the path to trades.json — volume path on Railway, local path otherwise."""
+    data_dir = "/data"
+    if os.path.isdir(data_dir):
+        return os.path.join(data_dir, "trades.json")
+    return TRADES_LOCAL_PATH
+
+
+def load_trades(path: str) -> list:
+    if not os.path.exists(path):
+        return []
+    with open(path, "r") as f:
+        return json.load(f)
+
+
+def save_trades(trades: list, path: str) -> None:
+    dir_name = os.path.dirname(path) or "."
+    with tempfile.NamedTemporaryFile("w", dir=dir_name, delete=False, suffix=".tmp") as f:
+        json.dump(trades, f, indent=2)
         tmp_path = f.name
     os.replace(tmp_path, path)
 

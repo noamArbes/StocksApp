@@ -414,3 +414,56 @@ def test_format_body_pct_shekel_currency():
     assert "₪190.00" in result
     assert "₪180.00" in result
     assert "$" not in result
+
+
+# --- load_trades / save_trades tests ---
+
+def test_load_trades_returns_empty_list_when_file_missing():
+    result = checker.load_trades("/tmp/nonexistent_trades_abc123.json")
+    assert result == []
+
+
+def test_load_trades_returns_list():
+    trades = [{"id": "t1", "ticker": "WDC", "buy_price": 42.10, "sell_price": 67.80,
+               "buy_date": "2026-01-15", "sell_date": "2026-04-10", "shares": 20,
+               "source": "yfinance", "created_at": "2026-04-10T14:00:00+00:00"}]
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(trades, f)
+        path = f.name
+    try:
+        result = checker.load_trades(path)
+        assert isinstance(result, list)
+        assert result[0]["ticker"] == "WDC"
+        assert result[0]["shares"] == 20
+    finally:
+        os.unlink(path)
+
+
+def test_save_and_reload_trades():
+    trades = [{"id": "t2", "ticker": "AAPL", "buy_price": 150.0, "sell_price": 160.0,
+               "buy_date": "2026-01-01", "sell_date": "2026-02-01", "shares": None,
+               "source": "yfinance", "created_at": "2026-02-01T00:00:00+00:00"}]
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        path = f.name
+    try:
+        checker.save_trades(trades, path)
+        result = checker.load_trades(path)
+        assert result[0]["ticker"] == "AAPL"
+        assert result[0]["shares"] is None
+    finally:
+        os.unlink(path)
+
+
+def test_save_trades_writes_valid_json():
+    trades = [{"id": "t3", "ticker": "TSLA", "buy_price": 200.0, "sell_price": 250.0,
+               "buy_date": "2026-01-01", "sell_date": "2026-03-01", "shares": 5,
+               "source": "yfinance", "created_at": "2026-03-01T00:00:00+00:00"}]
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        path = f.name
+    try:
+        checker.save_trades(trades, path)
+        with open(path) as f:
+            data = json.load(f)
+        assert data[0]["ticker"] == "TSLA"
+    finally:
+        os.unlink(path)
