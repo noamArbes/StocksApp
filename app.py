@@ -340,7 +340,7 @@ def alarm_record_sale(alarm_id):
         trade, error = _trade_from_form(request.form)
         if error:
             return render_template("trade_form.html", error=error, form=request.form,
-                                   title="Record Sale", is_record_sale=True)
+                                   title="Record Sale", is_record_sale=True, trade=alarm)
         def do_append(trades):
             trades.append(trade)
         modify_trades(do_append)
@@ -361,7 +361,7 @@ def alarm_record_sale(alarm_id):
         "sell_date": today,
     }
     return render_template("trade_form.html", form=form_data, title="Record Sale",
-                           is_record_sale=True, alarm=alarm)
+                           is_record_sale=True, alarm=alarm, trade=alarm)
 
 
 # --- Test email ---
