@@ -345,6 +345,8 @@ def alarm_record_sale(alarm_id):
             trades.append(trade)
         modify_trades(do_append)
         if request.form.get("delete_alarm") == "on":
+            # Note: trade write and alarm delete are separate operations;
+            # if the process dies between them, the trade is saved but the alarm survives.
             def do_delete(alarms):
                 alarms[:] = [a for a in alarms if a.get("id") != alarm_id]
             modify_alarms(do_delete)
@@ -361,7 +363,7 @@ def alarm_record_sale(alarm_id):
         "sell_date": today,
     }
     return render_template("trade_form.html", form=form_data, title="Record Sale",
-                           is_record_sale=True, alarm=alarm, trade=alarm)
+                           is_record_sale=True, trade=alarm)
 
 
 # --- Test email ---
