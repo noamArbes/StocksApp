@@ -329,6 +329,41 @@ def trade_delete(trade_id):
     return redirect(url_for("dashboard", tab="history"))
 
 
+@app.route("/alarm/<alarm_id>/record-sale", methods=["GET", "POST"])
+@login_required
+def alarm_record_sale(alarm_id):
+    alarms = read_alarms()
+    alarm = next((a for a in alarms if a.get("id") == alarm_id), None)
+    if alarm is None:
+        return redirect(url_for("dashboard"))
+    if request.method == "POST":
+        trade, error = _trade_from_form(request.form)
+        if error:
+            return render_template("trade_form.html", error=error, form=request.form,
+                                   title="Record Sale", is_record_sale=True)
+        def do_append(trades):
+            trades.append(trade)
+        modify_trades(do_append)
+        if request.form.get("delete_alarm") == "on":
+            def do_delete(alarms):
+                alarms[:] = [a for a in alarms if a.get("id") != alarm_id]
+            modify_alarms(do_delete)
+        return redirect(url_for("dashboard", tab="history"))
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    buy_date = (alarm.get("created_at") or "")[:10] or today
+    form_data = {
+        "ticker": alarm.get("ticker", ""),
+        "source": alarm.get("source", "yfinance"),
+        "shares": alarm.get("shares") or "",
+        "buy_price": alarm.get("initial_price") or "",
+        "buy_date": buy_date,
+        "sell_price": "",
+        "sell_date": today,
+    }
+    return render_template("trade_form.html", form=form_data, title="Record Sale",
+                           is_record_sale=True, alarm=alarm)
+
+
 # --- Test email ---
 
 @app.route("/alarm/<alarm_id>/test-email", methods=["POST"])

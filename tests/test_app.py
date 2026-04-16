@@ -818,3 +818,80 @@ def test_delete_trade(client, tmp_path, monkeypatch):
 def test_trade_routes_require_login(client):
     assert client.post("/trade/new").status_code == 302
     assert client.post("/trade/abc/delete").status_code == 302
+
+
+def test_record_sale_get_prefills_from_alarm(client, tmp_path, monkeypatch):
+    import app as app_module
+    alarms = [{"id": "rs1", "ticker": "WDC", "source": "yfinance", "owned": True,
+               "initial_price": 42.10, "shares": 20,
+               "created_at": "2026-01-15T10:00:00+00:00",
+               "enabled": True, "upper_limit": 280.0, "lower_limit": None,
+               "email": "a@b.com", "last_triggered": None, "timezone": None}]
+    alarms_file = tmp_path / "alarms_rs.json"
+    alarms_file.write_text(json.dumps(alarms))
+    monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
+    login(client)
+    resp = client.get("/alarm/rs1/record-sale")
+    assert resp.status_code == 200
+    body = resp.data.decode()
+    assert "WDC" in body
+    assert "42.1" in body
+    assert "2026-01-15" in body
+
+
+def test_record_sale_post_saves_trade(client, tmp_path, monkeypatch):
+    import app as app_module
+    alarms = [{"id": "rs2", "ticker": "WDC", "source": "yfinance", "owned": True,
+               "initial_price": 42.10, "shares": 20,
+               "created_at": "2026-01-15T10:00:00+00:00",
+               "enabled": True, "upper_limit": 280.0, "lower_limit": None,
+               "email": "a@b.com", "last_triggered": None, "timezone": None}]
+    alarms_file = tmp_path / "alarms_rs2.json"
+    alarms_file.write_text(json.dumps(alarms))
+    trades_file = tmp_path / "trades_rs2.json"
+    monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
+    monkeypatch.setattr(app_module, "_trades_path", lambda: str(trades_file))
+    login(client)
+    resp = client.post("/alarm/rs2/record-sale", data={
+        "ticker": "WDC", "source": "yfinance",
+        "shares": "20", "buy_price": "42.10", "buy_date": "2026-01-15",
+        "sell_price": "67.80", "sell_date": "2026-04-10",
+    })
+    assert resp.status_code == 302
+    assert "tab=history" in resp.headers["Location"]
+    saved = json.loads(trades_file.read_text())
+    assert len(saved) == 1
+    assert saved[0]["ticker"] == "WDC"
+    # Alarm is NOT deleted (checkbox not checked)
+    alarms_saved = json.loads(alarms_file.read_text())
+    assert len(alarms_saved) == 1
+
+
+def test_record_sale_post_deletes_alarm_when_checked(client, tmp_path, monkeypatch):
+    import app as app_module
+    alarms = [{"id": "rs3", "ticker": "WDC", "source": "yfinance", "owned": True,
+               "initial_price": 42.10, "shares": 20,
+               "created_at": "2026-01-15T10:00:00+00:00",
+               "enabled": True, "upper_limit": 280.0, "lower_limit": None,
+               "email": "a@b.com", "last_triggered": None, "timezone": None}]
+    alarms_file = tmp_path / "alarms_rs3.json"
+    alarms_file.write_text(json.dumps(alarms))
+    trades_file = tmp_path / "trades_rs3.json"
+    monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
+    monkeypatch.setattr(app_module, "_trades_path", lambda: str(trades_file))
+    login(client)
+    resp = client.post("/alarm/rs3/record-sale", data={
+        "ticker": "WDC", "source": "yfinance",
+        "shares": "20", "buy_price": "42.10", "buy_date": "2026-01-15",
+        "sell_price": "67.80", "sell_date": "2026-04-10",
+        "delete_alarm": "on",
+    })
+    assert resp.status_code == 302
+    alarms_saved = json.loads(alarms_file.read_text())
+    assert alarms_saved == []
+
+
+def test_record_sale_requires_login(client):
+    resp = client.get("/alarm/any/record-sale")
+    assert resp.status_code == 302
+    assert "dashboard" not in resp.headers.get("Location", "")

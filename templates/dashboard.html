@@ -128,6 +128,9 @@
               onsubmit="return confirm('Delete {{ alarm.ticker }} alarm?')">
             <button type="submit" class="btn btn-danger">Delete</button>
         </form>
+        {% if alarm.get('owned') %}
+        <a href="/alarm/{{ alarm.id }}/record-sale" class="btn" style="margin-left:auto">Record Sale</a>
+        {% endif %}
     </div>
 </div>
 {% else %}
