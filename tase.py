@@ -1,4 +1,5 @@
 import json
+import urllib.parse
 import urllib.request
 import urllib.error
 
@@ -85,3 +86,86 @@ def get_price(tase_id: str, tase_type: str) -> float:
     if price is None:
         raise ValueError(f"Price not available for TASE id {tase_id}")
     return float(price)
+
+
+def get_history(tase_id: str, tase_type: str, period: str) -> list[dict]:
+    """Fetch historical daily closing prices from TASE API.
+    Returns list of {"date": "YYYY-MM-DD", "price": float}, oldest first.
+    Raises ValueError on failure."""
+    from datetime import date, timedelta
+    today = date.today()
+    days_back = {"5d": 10, "1mo": 35, "1y": 370}
+    date_from = today - timedelta(days=days_back.get(period, 35))
+
+    if tase_type == "fund":
+        return _get_fund_history(tase_id, date_from, today)
+    return _get_security_history(tase_id, date_from, today)
+
+
+def _get_security_history(tase_id: str, date_from, date_to) -> list[dict]:
+    url = "https://api.tase.co.il/api/security/historyeod"
+    results = []
+    page = 1
+    while True:
+        body = json.dumps({
+            "dFrom": date_from.strftime("%Y-%m-%d"),
+            "dTo": date_to.strftime("%Y-%m-%d"),
+            "oId": tase_id,
+            "pageNum": page,
+            "pType": "8",
+            "TotalRec": 1,
+            "lang": "1",
+        }).encode()
+        req = urllib.request.Request(url, data=body, headers={
+            **_BASE_HEADERS,
+            "Content-Type": "application/json",
+        })
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read())
+        except Exception as e:
+            raise ValueError(f"Could not fetch security history for {tase_id}: {e}") from e
+        items = data.get("Items", [])
+        if not items:
+            break
+        for item in items:
+            day, month, year = item["TradeDate"].split("/")
+            results.append({"date": f"{year}-{month}-{day}", "price": float(item["CloseRate"])})
+        if len(items) < 30:
+            break
+        page += 1
+    results.reverse()
+    return results
+
+
+def _get_fund_history(tase_id: str, date_from, date_to) -> list[dict]:
+    url = "https://mayaapi.tase.co.il/api/fund/history"
+    results = []
+    page = 1
+    while True:
+        body = urllib.parse.urlencode({
+            "DateFrom": date_from.strftime("%Y-%m-%d"),
+            "DateTo": date_to.strftime("%Y-%m-%d"),
+            "FundId": tase_id,
+            "Page": page,
+            "Period": "0",
+        }).encode()
+        req = urllib.request.Request(url, data=body, headers={
+            **_MAYA_HEADERS,
+            "Content-Type": "application/x-www-form-urlencoded",
+        })
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read())
+        except Exception as e:
+            raise ValueError(f"Could not fetch fund history for {tase_id}: {e}") from e
+        items = data.get("Table", [])
+        if not items:
+            break
+        for item in items:
+            results.append({"date": item["TradeDate"][:10], "price": float(item["SellPrice"])})
+        if len(items) < 30:
+            break
+        page += 1
+    results.reverse()
+    return results

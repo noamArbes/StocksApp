@@ -8,13 +8,13 @@
 
         {% if not alarm %}
         <div class="market-toggle" id="market-toggle">
-            <button type="button" class="btn {% if not is_tase %}btn-primary{% endif %}" id="toggle-us">US (Yahoo Finance)</button>
-            <button type="button" class="btn {% if is_tase %}btn-primary{% endif %}" id="toggle-il">Israeli (TASE)</button>
+            <button type="button" class="btn {% if not is_tase %}btn-primary{% endif %}" id="toggle-us">US</button>
+            <button type="button" class="btn {% if is_tase %}btn-primary{% endif %}" id="toggle-il">Israeli</button>
         </div>
         {% else %}
         <div class="market-toggle">
-            <button type="button" class="btn {% if not is_tase %}btn-primary{% endif %}" disabled>US (Yahoo Finance)</button>
-            <button type="button" class="btn {% if is_tase %}btn-primary{% endif %}" disabled>Israeli (TASE)</button>
+            <button type="button" class="btn {% if not is_tase %}btn-primary{% endif %}" disabled>US</button>
+            <button type="button" class="btn {% if is_tase %}btn-primary{% endif %}" disabled>Israeli</button>
         </div>
         {% endif %}
 

@@ -293,18 +293,25 @@ def chart_data(alarm_id):
     alarm = next((a for a in alarms if a.get("id") == alarm_id), None)
     if alarm is None:
         return jsonify({"error": "not found"}), 404
-    ticker = alarm.get("ticker")
+    tase_id = alarm.get("tase_id")
     period = request.args.get("period", "1mo")
     if period not in ("5d", "1mo", "1y"):
         period = "1mo"
     try:
-        import yfinance as yf
-        hist = yf.Ticker(ticker).history(period=period)
-        labels = [str(d.date()) for d in hist.index]
-        prices = [round(float(p), 2) for p in hist["Close"]]
+        if tase_id:
+            history = tase.get_history(tase_id, alarm.get("tase_type", "security"), period)
+            labels = [h["date"] for h in history]
+            prices = [h["price"] for h in history]
+        else:
+            import yfinance as yf
+            ticker = alarm.get("ticker")
+            hist = yf.Ticker(ticker).history(period=period)
+            labels = [str(d.date()) for d in hist.index]
+            prices = [round(float(p), 2) for p in hist["Close"]]
         return jsonify({"labels": labels, "prices": prices})
     except Exception as e:
-        app.logger.error(f"Chart data fetch failed for {ticker}: {e}")
+        label = tase_id or alarm.get("ticker")
+        app.logger.error(f"Chart data fetch failed for {label}: {e}")
         return jsonify({"error": "Could not fetch chart data"}), 500
 
 
