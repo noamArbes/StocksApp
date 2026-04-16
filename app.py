@@ -28,6 +28,7 @@ app.secret_key = _SECRET_KEY
 
 _lock = threading.Lock()
 _ALARMS_PATH = checker.get_alarms_path()  # sync local→volume once at startup
+_TRADES_PATH = checker.get_trades_path()
 _tase_cache = tase.load_securities_cache()
 
 
@@ -54,6 +55,31 @@ def modify_alarms(fn):
         alarms = checker.load_alarms(path)
         fn(alarms)
         checker.save_alarms(alarms, path)
+
+
+def _trades_path():
+    return _TRADES_PATH
+
+
+def read_trades():
+    with _lock:
+        path = _trades_path()
+        return checker.load_trades(path)
+
+
+def write_trades(trades):
+    with _lock:
+        path = _trades_path()
+        checker.save_trades(trades, path)
+
+
+def modify_trades(fn):
+    """Read trades, apply fn(trades), write back — all under a single lock."""
+    with _lock:
+        path = _trades_path()
+        trades = checker.load_trades(path)
+        fn(trades)
+        checker.save_trades(trades, path)
 
 
 def login_required(f):
@@ -190,21 +216,30 @@ def alarm_edit(alarm_id):
     alarm = next((a for a in alarms if a.get("id") == alarm_id), None)
     if alarm is None:
         return redirect(url_for("dashboard"))
+    sort = request.args.get("sort", "")
+    owned_filter = request.args.get("owned", "")
+    back_params = {}
+    if sort:
+        back_params["sort"] = sort
+    if owned_filter:
+        back_params["owned"] = owned_filter
     if request.method == "POST":
         updated, error = _alarm_from_form(request.form, existing=alarm)
         if error:
-            return render_template("alarm_form.html", error=error, form=request.form, alarm=alarm, title="Edit Alarm")
+            return render_template("alarm_form.html", error=error, form=request.form, alarm=alarm,
+                                   title="Edit Alarm", sort=sort, owned_filter=owned_filter)
         def do_update(alarms):
             for i, a in enumerate(alarms):
                 if a.get("id") == alarm_id:
                     alarms[i] = updated
                     break
         modify_alarms(do_update)
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("dashboard", **back_params))
     form_data = dict(alarm)
     if isinstance(form_data.get("email"), list):
         form_data["email"] = ", ".join(form_data["email"])
-    return render_template("alarm_form.html", form=form_data, alarm=alarm, title="Edit Alarm")
+    return render_template("alarm_form.html", form=form_data, alarm=alarm, title="Edit Alarm",
+                           sort=sort, owned_filter=owned_filter)
 
 
 @app.route("/alarm/<alarm_id>/delete", methods=["POST"])
@@ -245,6 +280,53 @@ def alarm_toggle_owned(alarm_id):
     if owned:
         params["owned"] = owned
     return redirect(url_for("dashboard", **params))
+
+
+# --- Trade CRUD ---
+
+@app.route("/trade/new", methods=["GET", "POST"])
+@login_required
+def trade_new():
+    if request.method == "POST":
+        trade, error = _trade_from_form(request.form)
+        if error:
+            return render_template("trade_form.html", error=error, form=request.form, title="Add Trade")
+        def do_append(trades):
+            trades.append(trade)
+        modify_trades(do_append)
+        return redirect(url_for("dashboard", tab="history"))
+    return render_template("trade_form.html", form={}, title="Add Trade")
+
+
+@app.route("/trade/<trade_id>/edit", methods=["GET", "POST"])
+@login_required
+def trade_edit(trade_id):
+    trades = read_trades()
+    trade = next((t for t in trades if t.get("id") == trade_id), None)
+    if trade is None:
+        return redirect(url_for("dashboard", tab="history"))
+    if request.method == "POST":
+        updated, error = _trade_from_form(request.form, existing=trade)
+        if error:
+            return render_template("trade_form.html", error=error, form=request.form,
+                                   trade=trade, title="Edit Trade")
+        def do_update(trades):
+            for i, t in enumerate(trades):
+                if t.get("id") == trade_id:
+                    trades[i] = updated
+                    break
+        modify_trades(do_update)
+        return redirect(url_for("dashboard", tab="history"))
+    return render_template("trade_form.html", form=dict(trade), trade=trade, title="Edit Trade")
+
+
+@app.route("/trade/<trade_id>/delete", methods=["POST"])
+@login_required
+def trade_delete(trade_id):
+    def do_delete(trades):
+        trades[:] = [t for t in trades if t.get("id") != trade_id]
+    modify_trades(do_delete)
+    return redirect(url_for("dashboard", tab="history"))
 
 
 # --- Test email ---
@@ -374,7 +456,7 @@ def timezone_to_city():
     return jsonify(None)
 
 
-# --- Form helper ---
+# --- Form helpers ---
 
 def _alarm_from_form(form, existing=None):
     """Parse and validate form data. Returns (alarm_dict, error_str_or_None)."""
@@ -491,6 +573,57 @@ def _alarm_from_form(form, existing=None):
             return None, "At least one price limit is required"
 
     return alarm, None
+
+
+def _trade_from_form(form, existing=None):
+    """Parse and validate trade form data. Returns (trade_dict, error_str_or_None)."""
+    import uuid
+
+    ticker = form.get("ticker", "").strip()
+    if not ticker:
+        return None, "Ticker is required"
+
+    source = form.get("source", "yfinance")
+
+    shares_raw = form.get("shares", "").strip()
+    if shares_raw:
+        try:
+            shares = int(shares_raw)
+        except ValueError:
+            return None, "Shares must be a whole number"
+    else:
+        shares = None
+
+    buy_price_raw = form.get("buy_price", "").strip()
+    sell_price_raw = form.get("sell_price", "").strip()
+    try:
+        buy_price = float(buy_price_raw) if buy_price_raw else None
+        sell_price = float(sell_price_raw) if sell_price_raw else None
+    except ValueError:
+        return None, "Prices must be numbers"
+    if buy_price is None:
+        return None, "Buy price is required"
+    if sell_price is None:
+        return None, "Sell price is required"
+
+    buy_date = form.get("buy_date", "").strip()
+    sell_date = form.get("sell_date", "").strip()
+    if not buy_date:
+        return None, "Buy date is required"
+    if not sell_date:
+        return None, "Sell date is required"
+
+    return {
+        "id": existing["id"] if existing else str(uuid.uuid4())[:8],
+        "ticker": ticker,
+        "source": source,
+        "shares": shares,
+        "buy_price": buy_price,
+        "buy_date": buy_date,
+        "sell_price": sell_price,
+        "sell_date": sell_date,
+        "created_at": existing["created_at"] if existing else datetime.now(timezone.utc).isoformat(),
+    }, None
 
 
 if __name__ == "__main__":

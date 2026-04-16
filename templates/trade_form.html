@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="form-card">
+    <h2>{{ title }}</h2>
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    <form method="post">
+        <input type="hidden" name="source" value="{{ form.get('source') or 'yfinance' }}">
+
+        <label>Ticker / Stock name *
+            <input type="text" name="ticker"
+                value="{{ form.get('ticker') or '' }}"
+                placeholder="e.g. AAPL"
+                {% if trade %}readonly{% endif %}>
+        </label>
+
+        <label>Number of shares — optional
+            <input type="number" step="1" min="1" name="shares"
+                value="{{ form.get('shares') or '' }}"
+                placeholder="e.g. 20">
+        </label>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+            <label>Buy Price *
+                <input type="number" step="0.01" name="buy_price"
+                    value="{{ form.get('buy_price') or '' }}"
+                    placeholder="e.g. 42.10">
+            </label>
+            <label>Buy Date *
+                <input type="date" name="buy_date"
+                    value="{{ form.get('buy_date') or '' }}">
+            </label>
+            <label>Sell Price *
+                <input type="number" step="0.01" name="sell_price"
+                    value="{{ form.get('sell_price') or '' }}"
+                    placeholder="e.g. 67.80">
+            </label>
+            <label>Sell Date *
+                <input type="date" name="sell_date"
+                    value="{{ form.get('sell_date') or '' }}">
+            </label>
+        </div>
+
+        {% if is_record_sale %}
+        <label class="checkbox-label">
+            <input type="checkbox" name="delete_alarm">
+            Delete alarm after saving
+        </label>
+        {% endif %}
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save Trade</button>
+            <a href="{{ url_for('dashboard', tab='history') }}" class="btn">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
