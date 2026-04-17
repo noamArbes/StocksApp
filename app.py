@@ -119,6 +119,40 @@ def logout():
 @app.route("/dashboard")
 @login_required
 def dashboard():
+    tab = request.args.get("tab", "alarms")
+
+    # --- History tab ---
+    if tab == "history":
+        trades = read_trades()
+        trade_pcts = {}
+        trade_pls = {}
+        pl_values = []
+        for t in trades:
+            buy = t.get("buy_price") or 0
+            pct = (t["sell_price"] - buy) / buy * 100 if buy else 0.0
+            trade_pcts[t["id"]] = pct
+            if t.get("shares"):
+                pl = (t["sell_price"] - buy) * t["shares"]
+                trade_pls[t["id"]] = pl
+                pl_values.append(pl)
+            else:
+                trade_pls[t["id"]] = None
+        pct_list = list(trade_pcts.values())
+        avg_pct = sum(pct_list) / len(pct_list) if pct_list else None
+        best = max(trade_pcts, key=trade_pcts.get, default=None)
+        best_trade = next((t for t in trades if t["id"] == best), None) if best else None
+        summary = {
+            "count": len(trades),
+            "total_pl": sum(pl_values) if pl_values else None,
+            "avg_pct": avg_pct,
+            "best_ticker": best_trade["ticker"] if best_trade else None,
+            "best_pct": trade_pcts[best] if best else None,
+        }
+        return render_template("dashboard.html", tab=tab, trades=trades,
+                               summary=summary, trade_pcts=trade_pcts,
+                               trade_pls=trade_pls)
+
+    # --- Alarms tab ---
     alarms = read_alarms()
     sort = request.args.get("sort", "newest")
     if sort == "oldest":
@@ -127,11 +161,13 @@ def dashboard():
         alarms.sort(key=lambda a: a.get("ticker", ""))
     else:
         alarms.sort(key=lambda a: a.get("created_at") or "", reverse=True)
+
     owned_filter = request.args.get("owned", "all")
     if owned_filter == "owned":
         alarms = [a for a in alarms if a.get("owned", False)]
     elif owned_filter == "watching":
         alarms = [a for a in alarms if not a.get("owned", False)]
+
     prices = {}
     for alarm in alarms:
         ticker = alarm.get("ticker")
@@ -188,9 +224,9 @@ def dashboard():
                 parts.append("↓ triggered" if diff <= 0 else f"↓ {curr}{diff:.2f} ({diff/price*100:.1f}%) to go")
             distances[alarm_id] = " · ".join(parts) or None
 
-    return render_template("dashboard.html", alarms=alarms, prices=prices, sort=sort,
-                           triggered=triggered, distances=distances, price_changes=price_changes,
-                           owned_filter=owned_filter)
+    return render_template("dashboard.html", tab=tab, alarms=alarms, prices=prices,
+                           sort=sort, triggered=triggered, distances=distances,
+                           price_changes=price_changes, owned_filter=owned_filter)
 
 
 # --- Alarm CRUD ---
