@@ -89,9 +89,11 @@
         <td>{{ trade.buy_date }}</td>
         <td>{{ curr }}{{ "%.2f"|format(trade.sell_price) }}</td>
         <td>{{ trade.sell_date }}</td>
+        {% if pct is not none %}
         <td class="{% if pct >= 0 %}value-positive{% else %}value-negative{% endif %}">
             {{ "%+.1f"|format(pct) }}%
         </td>
+        {% else %}<td>—</td>{% endif %}
         <td>
             {% if pl is not none %}
             <span class="{% if pl >= 0 %}value-positive{% else %}value-negative{% endif %}">
