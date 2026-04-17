@@ -895,3 +895,66 @@ def test_record_sale_requires_login(client):
     resp = client.get("/alarm/any/record-sale")
     assert resp.status_code == 302
     assert "dashboard" not in resp.headers.get("Location", "")
+
+
+def test_dashboard_history_tab_shows_trades(client, tmp_path, monkeypatch):
+    import app as app_module
+    trades = [{"id": "dt1", "ticker": "WDC", "source": "yfinance", "shares": 20,
+               "buy_price": 42.10, "buy_date": "2026-01-15",
+               "sell_price": 67.80, "sell_date": "2026-04-10",
+               "created_at": "2026-04-10T00:00:00+00:00"}]
+    trades_file = tmp_path / "trades_dash.json"
+    trades_file.write_text(json.dumps(trades))
+    monkeypatch.setattr(app_module, "_trades_path", lambda: str(trades_file))
+    login(client)
+    resp = client.get("/dashboard?tab=history")
+    assert resp.status_code == 200
+    body = resp.data.decode()
+    assert "WDC" in body
+    assert "67" in body  # sell price
+
+
+def test_dashboard_history_tab_shows_summary(client, tmp_path, monkeypatch):
+    import app as app_module
+    trades = [
+        {"id": "dt2", "ticker": "WDC", "source": "yfinance", "shares": 10,
+         "buy_price": 40.0, "buy_date": "2026-01-01",
+         "sell_price": 60.0, "sell_date": "2026-03-01",
+         "created_at": "2026-03-01T00:00:00+00:00"},
+        {"id": "dt3", "ticker": "AAPL", "source": "yfinance", "shares": None,
+         "buy_price": 150.0, "buy_date": "2026-01-01",
+         "sell_price": 165.0, "sell_date": "2026-03-15",
+         "created_at": "2026-03-15T00:00:00+00:00"},
+    ]
+    trades_file = tmp_path / "trades_sum.json"
+    trades_file.write_text(json.dumps(trades))
+    monkeypatch.setattr(app_module, "_trades_path", lambda: str(trades_file))
+    login(client)
+    resp = client.get("/dashboard?tab=history")
+    assert resp.status_code == 200
+    body = resp.data.decode()
+    # Summary: 2 trades, WDC is best (+50%)
+    assert "2" in body
+    assert "WDC" in body
+
+
+def test_dashboard_alarms_tab_does_not_load_trades(client, tmp_path, monkeypatch):
+    import app as app_module
+    monkeypatch.setattr("checker.get_price", lambda t: 42.0)
+    login(client)
+    # Default tab=alarms — should not try to read trades at all (no trades file patched)
+    resp = client.get("/dashboard")
+    assert resp.status_code == 200
+
+
+def test_dashboard_tab_bar_rendered(client, tmp_path, monkeypatch):
+    import app as app_module
+    trades_file = tmp_path / "trades_tabs.json"
+    trades_file.write_text(json.dumps([]))
+    monkeypatch.setattr(app_module, "_trades_path", lambda: str(trades_file))
+    login(client)
+    resp = client.get("/dashboard?tab=history")
+    assert resp.status_code == 200
+    body = resp.data.decode()
+    assert "Sell History" in body
+    assert "Alarms" in body

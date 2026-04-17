@@ -414,3 +414,91 @@ form label { position: relative; }
     border-color: #c0522a;
     color: #f5e6d3;
 }
+
+/* ── Tab bar ───────────────────────────────── */
+.tab-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border-bottom: 2px solid #3a2a1a;
+    margin-bottom: 1.25rem;
+}
+.tab {
+    padding: 8px 20px;
+    font-size: 0.9rem;
+    border-radius: 6px 6px 0 0;
+    border: 1px solid transparent;
+    border-bottom: none;
+    color: #d4922a;
+    text-decoration: none;
+    background: #2a1f0f;
+}
+.tab-active {
+    background: #d4922a;
+    color: #1a0f00;
+    font-weight: 700;
+    border-color: #3a2a1a;
+}
+
+/* ── History summary card ──────────────────── */
+.history-summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 1.25rem;
+}
+.history-stat {
+    background: #2a1f0f;
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+}
+.history-stat-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #7a6a5a;
+    margin-bottom: 6px;
+}
+.history-stat-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #d4922a;
+}
+.value-positive { color: #22c55e; }
+.value-negative { color: #ef4444; }
+
+/* ── History table ─────────────────────────── */
+.history-table-wrap {
+    overflow-x: auto;
+}
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+.history-table thead tr {
+    border-bottom: 1px solid #3a2a1a;
+    color: #7a6a5a;
+    text-align: left;
+}
+.history-table th,
+.history-table td {
+    padding: 10px 12px;
+    white-space: nowrap;
+}
+.history-table tbody tr {
+    border-bottom: 1px solid #2a1f0f;
+    color: #c8a07a;
+}
+.history-table tbody tr:last-child {
+    border-bottom: none;
+}
+.trade-ticker {
+    font-weight: 700;
+    color: #d4922a;
+}
+.trade-actions {
+    display: flex;
+    gap: 6px;
+}

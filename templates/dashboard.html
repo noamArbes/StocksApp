@@ -2,8 +2,124 @@
 {% block content %}
 <div class="toolbar">
     <h2>Alarms</h2>
+    {% if tab != 'history' %}
     <a href="{{ url_for('alarm_new') }}" class="btn btn-primary">+ Add</a>
+    {% endif %}
 </div>
+
+{# ── Tab bar ── #}
+<div class="tab-bar">
+    <a href="{{ url_for('dashboard') }}"
+       class="tab {% if tab != 'history' %}tab-active{% endif %}">Alarms</a>
+    <a href="{{ url_for('dashboard', tab='history') }}"
+       class="tab {% if tab == 'history' %}tab-active{% endif %}">Sell History</a>
+    {% if tab == 'history' %}
+    <a href="{{ url_for('trade_new') }}" class="btn btn-primary" style="margin-left:auto">+ Add Trade</a>
+    {% endif %}
+</div>
+
+{% if tab == 'history' %}
+{# ══════════════════════════════════════════════════
+   SELL HISTORY TAB
+══════════════════════════════════════════════════ #}
+
+{# Summary card #}
+<div class="history-summary">
+    <div class="history-stat">
+        <div class="history-stat-label">Trades</div>
+        <div class="history-stat-value">{{ summary.count }}</div>
+    </div>
+    <div class="history-stat">
+        <div class="history-stat-label">Total P&amp;L</div>
+        {% if summary.total_pl is not none %}
+        <div class="history-stat-value {% if summary.total_pl >= 0 %}value-positive{% else %}value-negative{% endif %}">
+            {{ "%+.2f"|format(summary.total_pl) }}
+        </div>
+        {% else %}
+        <div class="history-stat-value">—</div>
+        {% endif %}
+    </div>
+    <div class="history-stat">
+        <div class="history-stat-label">Avg Return</div>
+        {% if summary.avg_pct is not none %}
+        <div class="history-stat-value {% if summary.avg_pct >= 0 %}value-positive{% else %}value-negative{% endif %}">
+            {{ "%+.1f"|format(summary.avg_pct) }}%
+        </div>
+        {% else %}
+        <div class="history-stat-value">—</div>
+        {% endif %}
+    </div>
+    <div class="history-stat">
+        <div class="history-stat-label">Best Trade</div>
+        {% if summary.best_ticker %}
+        <div class="history-stat-value value-positive">
+            {{ "%+.1f"|format(summary.best_pct) }}% {{ summary.best_ticker }}
+        </div>
+        {% else %}
+        <div class="history-stat-value">—</div>
+        {% endif %}
+    </div>
+</div>
+
+{% if trades %}
+<div class="history-table-wrap">
+<table class="history-table">
+    <thead>
+        <tr>
+            <th>Stock</th>
+            <th>Shares</th>
+            <th>Buy Price</th>
+            <th>Buy Date</th>
+            <th>Sell Price</th>
+            <th>Sell Date</th>
+            <th>% Change</th>
+            <th>Total P&amp;L</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for trade in trades %}
+    {% set curr = '₪' if trade.get('source') == 'tase' else '$' %}
+    {% set pct = trade_pcts.get(trade.id) %}
+    {% set pl = trade_pls.get(trade.id) %}
+    <tr>
+        <td class="trade-ticker">{{ trade.ticker }}</td>
+        <td>{{ trade.shares if trade.shares else '—' }}</td>
+        <td>{{ curr }}{{ "%.2f"|format(trade.buy_price) }}</td>
+        <td>{{ trade.buy_date }}</td>
+        <td>{{ curr }}{{ "%.2f"|format(trade.sell_price) }}</td>
+        <td>{{ trade.sell_date }}</td>
+        <td class="{% if pct >= 0 %}value-positive{% else %}value-negative{% endif %}">
+            {{ "%+.1f"|format(pct) }}%
+        </td>
+        <td>
+            {% if pl is not none %}
+            <span class="{% if pl >= 0 %}value-positive{% else %}value-negative{% endif %}">
+                {{ curr }}{{ "%+.2f"|format(pl) }}
+            </span>
+            {% else %}—{% endif %}
+        </td>
+        <td class="trade-actions">
+            <a href="{{ url_for('trade_edit', trade_id=trade.id) }}" class="btn">Edit</a>
+            <form method="post" action="{{ url_for('trade_delete', trade_id=trade.id) }}"
+                  style="display:inline"
+                  onsubmit="return confirm('Delete {{ trade.ticker }} trade?')">
+                <button type="submit" class="btn btn-danger">Delete</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% else %}
+<p class="empty">No trades yet. <a href="{{ url_for('trade_new') }}">Add one</a>.</p>
+{% endif %}
+
+{% else %}
+{# ══════════════════════════════════════════════════
+   ALARMS TAB
+══════════════════════════════════════════════════ #}
 
 <div class="sort-controls">
     <a href="{{ url_for('dashboard', sort='newest', owned=owned_filter if owned_filter != 'all' else None) }}"
@@ -123,7 +239,7 @@
         {% endif %}
     </details>
     <div class="card-actions">
-        <a href="/alarm/{{ alarm.id }}/edit" class="btn">Edit</a>
+        <a href="/alarm/{{ alarm.id }}/edit?sort={{ sort }}&owned={{ owned_filter }}" class="btn">Edit</a>
         <form method="post" action="/alarm/{{ alarm.id }}/delete" style="display:inline"
               onsubmit="return confirm('Delete {{ alarm.ticker }} alarm?')">
             <button type="submit" class="btn btn-danger">Delete</button>
@@ -136,9 +252,11 @@
 {% else %}
 <p class="empty">No alarms yet. <a href="{{ url_for('alarm_new') }}">Add one</a>.</p>
 {% endfor %}
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
+{% if tab != 'history' %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script>
 const _charts = {};
@@ -277,4 +395,5 @@ document.getElementById('alarm-search').addEventListener('input', function() {
     });
 });
 </script>
+{% endif %}
 {% endblock %}
