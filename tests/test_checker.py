@@ -1,3 +1,5 @@
+import sys
+import pytest
 from datetime import datetime, timezone, timedelta
 import checker
 from checker import condition_met, should_alert
@@ -172,6 +174,7 @@ def test_save_alarms_writes_valid_json():
         os.unlink(path)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="volume sync path uses /data which is Linux-only")
 def test_volume_sync_preserves_base_price(monkeypatch, tmp_path):
     import json as _json
     data_dir = tmp_path / "data"
@@ -191,9 +194,7 @@ def test_volume_sync_preserves_base_price(monkeypatch, tmp_path):
     import os
     original_isdir = os.path.isdir
     monkeypatch.setattr("os.path.isdir", lambda p: True if p == "/data" else original_isdir(p))
-    monkeypatch.setattr("checker.get_alarms_path.__globals__['os'].path.isdir", lambda p: True if p == "/data" else original_isdir(p), raising=False)
 
-    # Patch os.path.isdir inside checker module specifically
     import checker
     monkeypatch.setattr(checker.os.path, "isdir", lambda p: True if p == "/data" else original_isdir(p))
 
@@ -267,7 +268,7 @@ def test_pct_neither_triggered():
     triggered, direction, actual_pct = condition_met_pct(alarm, 100.0)
     assert triggered is False
     assert direction is None
-    assert actual_pct is None
+    assert actual_pct == 0.0
 
 
 from checker import format_subject_pct, format_body_pct

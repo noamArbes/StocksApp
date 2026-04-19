@@ -76,7 +76,7 @@ def test_alarm_from_form_valid_price():
     form = ImmutableMultiDict([
         ("ticker", "aapl"), ("alarm_type", "price"),
         ("upper_limit", "200"), ("lower_limit", ""),
-        ("email", "a@b.com"), ("timezone", ""), ("enabled", "on"),
+        ("email", "a@b.com"), ("timezone", "America/New_York"), ("enabled", "on"),
     ])
     alarm, error = _alarm_from_form(form)
     assert error is None
@@ -100,7 +100,8 @@ def test_alarm_from_form_no_condition():
     from app import _alarm_from_form
     from werkzeug.datastructures import ImmutableMultiDict
     form = ImmutableMultiDict([("ticker", "WDC"), ("alarm_type", "price"),
-                               ("upper_limit", ""), ("lower_limit", ""), ("email", "a@b.com")])
+                               ("upper_limit", ""), ("lower_limit", ""),
+                               ("email", "a@b.com"), ("timezone", "America/New_York")])
     _, error = _alarm_from_form(form)
     assert error == "At least one price limit is required"
 
@@ -109,7 +110,8 @@ def test_alarm_from_form_bad_number():
     from app import _alarm_from_form
     from werkzeug.datastructures import ImmutableMultiDict
     form = ImmutableMultiDict([("ticker", "WDC"), ("alarm_type", "price"),
-                               ("upper_limit", "abc"), ("email", "a@b.com")])
+                               ("upper_limit", "abc"), ("email", "a@b.com"),
+                               ("timezone", "America/New_York")])
     _, error = _alarm_from_form(form)
     assert error == "Price limits must be numbers"
 
@@ -118,7 +120,8 @@ def test_alarm_from_form_multiple_emails():
     from app import _alarm_from_form
     from werkzeug.datastructures import ImmutableMultiDict
     form = ImmutableMultiDict([("ticker", "WDC"), ("alarm_type", "price"),
-                               ("upper_limit", "200"), ("email", "a@b.com, c@d.com")])
+                               ("upper_limit", "200"), ("email", "a@b.com, c@d.com"),
+                               ("timezone", "America/New_York")])
     alarm, error = _alarm_from_form(form)
     assert error is None
     assert alarm["email"] == ["a@b.com", "c@d.com"]
@@ -128,7 +131,8 @@ def test_alarm_from_form_pct():
     from app import _alarm_from_form
     from werkzeug.datastructures import ImmutableMultiDict
     form = ImmutableMultiDict([("ticker", "WDC"), ("alarm_type", "pct"),
-                               ("upper_pct", "5"), ("lower_pct", "3"), ("email", "a@b.com")])
+                               ("upper_pct", "5"), ("lower_pct", "3"),
+                               ("email", "a@b.com"), ("timezone", "America/New_York")])
     alarm, error = _alarm_from_form(form)
     assert error is None
     assert alarm["upper_pct"] == 5.0
@@ -173,7 +177,7 @@ def test_create_alarm_via_post(client, tmp_path, monkeypatch):
     login(client)
     resp = client.post("/alarm/new", data={
         "ticker": "AAPL", "alarm_type": "price", "upper_limit": "200",
-        "lower_limit": "", "email": "a@b.com", "timezone": "", "enabled": "on",
+        "lower_limit": "", "email": "a@b.com", "timezone": "America/New_York", "enabled": "on",
     })
     assert resp.status_code == 302
     saved = json.loads(alarms_file.read_text())
@@ -328,7 +332,7 @@ def test_alarm_creation_sets_created_at_and_initial_price(client, tmp_path, monk
     login(client)
     client.post("/alarm/new", data={
         "ticker": "MSFT", "alarm_type": "price", "upper_limit": "500",
-        "lower_limit": "", "email": "a@b.com", "timezone": "", "enabled": "on",
+        "lower_limit": "", "email": "a@b.com", "timezone": "America/New_York", "enabled": "on",
     })
     saved = json.loads(alarms_file.read_text())
     assert len(saved) == 1
@@ -348,7 +352,7 @@ def test_alarm_creation_initial_price_null_on_fetch_failure(client, tmp_path, mo
     login(client)
     client.post("/alarm/new", data={
         "ticker": "MSFT", "alarm_type": "price", "upper_limit": "500",
-        "lower_limit": "", "email": "a@b.com", "timezone": "", "enabled": "on",
+        "lower_limit": "", "email": "a@b.com", "timezone": "America/New_York", "enabled": "on",
     })
     saved = json.loads(alarms_file.read_text())
     assert len(saved) == 1
