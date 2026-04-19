@@ -680,7 +680,7 @@ def test_alarm_from_form_shares_invalid():
         ("enabled", "on"), ("owned", "on"), ("shares", "abc"),
     ])
     _, error = _alarm_from_form(form)
-    assert error == "Shares must be a whole number"
+    assert error == "Shares must be a number"
 
 
 def test_trade_from_form_valid():

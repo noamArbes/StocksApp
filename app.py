@@ -571,9 +571,9 @@ def _alarm_from_form(form, existing=None):
     shares_raw = form.get("shares", "").strip()
     if shares_raw:
         try:
-            shares = int(shares_raw)
+            shares = float(shares_raw)
         except ValueError:
-            return None, "Shares must be a whole number"
+            return None, "Shares must be a number"
     else:
         shares = None
 
@@ -665,9 +665,9 @@ def _trade_from_form(form, existing=None):
     shares_raw = form.get("shares", "").strip()
     if shares_raw:
         try:
-            shares = int(shares_raw)
+            shares = float(shares_raw)
         except ValueError:
-            return None, "Shares must be a whole number"
+            return None, "Shares must be a number"
     else:
         shares = None
 
