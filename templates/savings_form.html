@@ -56,11 +56,19 @@
                 placeholder="e.g. 23.5" required>
         </label>
 
+        {% if category == 'etf' %}
+        <label>Total gain/loss % since purchase
+            <input type="number" step="any" name="pl_pct"
+                value="{{ form.get('pl_pct', '') }}"
+                placeholder="e.g. 15 for +15%, -8 for -8%" required>
+        </label>
+        {% else %}
         <label>Total cost basis (what you paid in total)
             <input type="number" step="0.01" min="0" name="cost_basis"
                 value="{{ form.get('cost_basis', '') }}"
                 placeholder="e.g. 8200.00" required>
         </label>
+        {% endif %}
 
         <div id="currency-field" {% if is_tase %}style="display:none"{% endif %}>
             <label>Currency
