@@ -582,7 +582,7 @@ document.getElementById('alarm-search').addEventListener('input', function() {
                 <td>
                     <span class="savings-inline-edit" data-hid="{{ h.id }}"
                           onclick="startSharesEdit(this, {{ h.shares }})">
-                        {{ h.shares }} ✎
+                        {{ "%.2f"|format(h.shares) }} ✎
                     </span>
                     <form class="savings-shares-form" id="shares-form-{{ h.id }}"
                           style="display:none" onsubmit="submitShares(event, '{{ h.id }}')">

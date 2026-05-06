@@ -207,7 +207,7 @@ def _holding_from_form(form, existing=None):
                 raise ValueError("no price")
         except Exception:
             return None, "Could not fetch current price — please try again"
-        shares = current_value / current_price
+        shares = round(current_value / current_price, 2)
     else:
         shares_raw = form.get("shares", "").strip()
         if not shares_raw:
