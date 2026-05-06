@@ -186,13 +186,13 @@ def _holding_from_form(form, existing=None):
     if category == "etf":
         pl_pct_raw = form.get("pl_pct", "").strip()
         if not pl_pct_raw:
-            return None, "Total gain/loss % is required and must be a number"
+            return None, "Total gain/loss % is required"
         try:
             pl_pct = float(pl_pct_raw)
         except ValueError:
-            return None, "Total gain/loss % is required and must be a number"
-        if pl_pct == -100:
-            return None, "Gain/loss % cannot be -100%"
+            return None, "Total gain/loss % must be a number"
+        if pl_pct <= -100:
+            return None, "Gain/loss % cannot be -100% or less"
         try:
             if is_tase:
                 current_price = tase.get_price(tase_id, tase_type)

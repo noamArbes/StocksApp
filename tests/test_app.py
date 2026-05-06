@@ -1072,6 +1072,19 @@ def test_holding_from_form_etf_pnl_minus_100(monkeypatch):
     assert "-100" in error or "cannot be" in error.lower()
 
 
+def test_holding_from_form_etf_pnl_near_minus_100(monkeypatch):
+    import app as app_module
+    from werkzeug.datastructures import ImmutableMultiDict
+    monkeypatch.setattr(app_module.checker, "get_price_with_change", lambda t: (100.0, 99.0))
+    form = ImmutableMultiDict([
+        ("source", "yfinance"), ("ticker", "VOO"), ("name", "Vanguard"),
+        ("category", "etf"), ("shares", "10"), ("pl_pct", "-100.5"), ("currency", "USD"),
+    ])
+    holding, error = app_module._holding_from_form(form)
+    assert holding is None
+    assert error is not None
+
+
 def test_holding_from_form_etf_price_fetch_fails(monkeypatch):
     import app as app_module
     from werkzeug.datastructures import ImmutableMultiDict
