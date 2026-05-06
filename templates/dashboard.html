@@ -582,14 +582,14 @@ document.getElementById('alarm-search').addEventListener('input', function() {
                 <td>
                     <span class="savings-inline-edit" data-hid="{{ h.id }}"
                           onclick="startSharesEdit(this, {{ h.shares }})">
-                        {{ "%.2f"|format(h.shares) }} ✎
+                        {{ "%.2f"|format(h.shares) }} ✏
                     </span>
                     <form class="savings-shares-form" id="shares-form-{{ h.id }}"
                           style="display:none" onsubmit="submitShares(event, '{{ h.id }}')">
                         <input type="number" step="any" min="0" class="savings-shares-input"
                                id="shares-input-{{ h.id }}" value="{{ h.shares }}">
-                        <button type="submit" class="btn-xs">✓</button>
-                        <button type="button" class="btn-xs" onclick="cancelSharesEdit('{{ h.id }}')">✕</button>
+                        <button type="submit">✓</button>
+                        <button type="button" onclick="cancelSharesEdit('{{ h.id }}')">✕</button>
                     </form>
                 </td>
                 <td>{{ curr }}{{ "{:,.2f}".format(h.cost_basis) }}</td>
@@ -670,7 +670,7 @@ function submitShares(event, hid) {
     .then(data => {
         if (data.ok) {
             const el = document.querySelector('[data-hid="' + hid + '"]');
-            el.textContent = shares + ' ✎';
+            el.textContent = parseFloat(shares).toFixed(2) + ' ✏';
             el.style.display = '';
             document.getElementById('shares-form-' + hid).style.display = 'none';
         }

@@ -708,28 +708,102 @@ form label { position: relative; }
 }
 
 .savings-inline-edit {
-    background: #e8f5e9;
-    border: 1px solid #a5d6a7;
-    border-radius: 4px;
-    padding: 0.15rem 0.5rem;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    padding: 0.15rem 0.45rem;
     font-size: 0.8rem;
-    color: #1b5e20;
+    color: inherit;
     cursor: pointer;
     white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.savings-inline-edit:hover {
+    background: #eaf4ea;
+    border-color: #a5d6a7;
+    color: #2d6a2d;
 }
 
 .savings-shares-form {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.3rem;
 }
 
 .savings-shares-input {
     width: 70px;
     font-size: 0.8rem;
-    padding: 0.1rem 0.3rem;
-    border: 1px solid #a5d6a7;
-    border-radius: 4px;
+    padding: 0.15rem 0.35rem;
+    border: 1px solid #c0b8ae;
+    border-radius: 5px;
+}
+
+.savings-shares-form button {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+}
+
+.savings-shares-form button:active {
+    transform: scale(0.92);
+}
+
+.savings-shares-form button[type="submit"] {
+    background: #5c7a3e;
+    color: #fff;
+}
+
+.savings-shares-form button[type="submit"]:hover {
+    background: #4a6330;
+}
+
+.savings-shares-form button[type="button"] {
+    background: #d0c8be;
+    color: #5a4a3a;
+}
+
+.savings-shares-form button[type="button"]:hover {
+    background: #b8b0a6;
+}
+
+.savings-actions .btn-xs {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.65rem;
+    border-radius: 5px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    border: 1px solid #5c7a3e;
+    background: transparent;
+    color: #5c7a3e;
+    transition: background 0.15s, color 0.15s;
+}
+
+.savings-actions .btn-xs:hover {
+    background: #5c7a3e;
+    color: #fff;
+}
+
+.savings-actions .btn-xs.danger {
+    border-color: #b94040;
+    color: #b94040;
+    background: transparent;
+}
+
+.savings-actions .btn-xs.danger:hover {
+    background: #b94040;
+    color: #fff;
 }
 
 .savings-pct-bar-wrap {
