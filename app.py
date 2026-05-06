@@ -1,6 +1,7 @@
 import os
 import sys
 import threading
+import uuid
 from functools import wraps
 from datetime import datetime, timezone
 
@@ -155,8 +156,6 @@ def _fetch_savings_prices(holdings: list) -> dict:
 
 def _holding_from_form(form, existing=None):
     """Parse and validate holding form data. Returns (holding_dict, error_str|None)."""
-    import uuid
-
     source = form.get("source", "yfinance")
     is_tase = source == "tase"
 
@@ -558,6 +557,116 @@ def alarm_record_sale(alarm_id):
 
 # --- Savings ---
 
+@app.route("/savings")
+@login_required
+def savings():
+    holdings = read_savings()
+    prices = _fetch_savings_prices(holdings)
+    usd_to_ils = checker.get_usd_to_ils()
+
+    _maybe_record_snapshot(holdings, prices, usd_to_ils)
+
+    CATEGORIES = ("etf", "stocks", "mmf")
+
+    holding_data = {}
+    for h in holdings:
+        hid = h["id"]
+        ticker = h.get("ticker")
+        pinfo = prices.get(ticker, {})
+        price = pinfo.get("price")
+        prev_close = pinfo.get("prev_close")
+        shares = h.get("shares") or 0
+        cost_basis = h.get("cost_basis") or 0
+        currency = h.get("currency", "ILS")
+        rate = usd_to_ils if currency == "USD" else 1.0
+
+        current_value = price * shares if price is not None else None
+        current_value_ils = current_value * rate if current_value is not None else None
+        cost_ils = cost_basis * rate
+        pl_ils = (current_value_ils - cost_ils) if current_value_ils is not None else None
+        pl_pct = (pl_ils / cost_ils * 100) if (pl_ils is not None and cost_ils) else None
+
+        today_change = ((price - prev_close) * shares
+                        if price is not None and prev_close is not None else None)
+        today_change_ils = today_change * rate if today_change is not None else None
+
+        holding_data[hid] = {
+            "price": price,
+            "current_value": current_value,
+            "current_value_ils": current_value_ils,
+            "cost_ils": cost_ils,
+            "pl_ils": pl_ils,
+            "pl_pct": pl_pct,
+            "today_change": today_change,
+            "today_change_ils": today_change_ils,
+            "last_updated_rel": _relative_time(h.get("last_updated")),
+            "pct_of_cat": 0.0,
+        }
+
+    cat_data = {}
+    for cat in CATEGORIES:
+        cat_holdings = [h for h in holdings if h.get("category") == cat]
+        value_ils = sum(holding_data[h["id"]]["current_value_ils"] or 0 for h in cat_holdings)
+        pl_ils = sum(holding_data[h["id"]]["pl_ils"] or 0 for h in cat_holdings)
+        today_ils = sum(holding_data[h["id"]]["today_change_ils"] or 0 for h in cat_holdings)
+        cost_ils = sum(holding_data[h["id"]]["cost_ils"] for h in cat_holdings)
+        cat_data[cat] = {
+            "value_ils": value_ils,
+            "pl_ils": pl_ils,
+            "today_ils": today_ils,
+            "cost_ils": cost_ils,
+            "pct_of_portfolio": 0.0,
+        }
+
+    total_value_ils = sum(d["value_ils"] for d in cat_data.values())
+    total_pl_ils = sum(d["pl_ils"] for d in cat_data.values())
+    total_today_ils = sum(d["today_ils"] for d in cat_data.values())
+    total_cost_ils = sum(d["cost_ils"] for d in cat_data.values())
+    total_pl_pct = (total_pl_ils / total_cost_ils * 100) if total_cost_ils else None
+    prev_total = total_value_ils - total_today_ils
+    total_today_pct = (total_today_ils / prev_total * 100) if prev_total else None
+
+    for cat in CATEGORIES:
+        cat_data[cat]["pct_of_portfolio"] = (
+            cat_data[cat]["value_ils"] / total_value_ils * 100 if total_value_ils else 0.0)
+        cat_value = cat_data[cat]["value_ils"]
+        for h in holdings:
+            if h.get("category") == cat:
+                hval = holding_data[h["id"]]["current_value_ils"] or 0
+                holding_data[h["id"]]["pct_of_cat"] = (
+                    hval / cat_value * 100 if cat_value else 0.0)
+
+    circ = 251.33
+    pie = {}
+    offset = 0.0
+    for cat in CATEGORIES:
+        pct = cat_data[cat]["pct_of_portfolio"]
+        dash = round(pct / 100 * circ, 2)
+        gap = round(circ - dash, 2)
+        pie[cat] = {"dash": dash, "gap": gap, "offset": round(-offset, 2)}
+        offset += dash
+
+    snapshots = read_snapshots()[-30:]
+
+    summary = {
+        "total_value_ils": total_value_ils,
+        "total_pl_ils": total_pl_ils,
+        "total_pl_pct": total_pl_pct,
+        "total_today_ils": total_today_ils,
+        "total_today_pct": total_today_pct,
+    }
+
+    return render_template(
+        "dashboard.html", tab="savings",
+        holdings=holdings, holding_data=holding_data,
+        cat_data=cat_data, summary=summary,
+        pie=pie, snapshots=snapshots,
+        usd_to_ils=usd_to_ils,
+        categories=("etf", "stocks", "mmf"),
+        category_labels={"etf": "ETFs", "stocks": "Stocks", "mmf": "Money Market Funds (MMF)"},
+    )
+
+
 @app.route("/savings/new", methods=["GET", "POST"])
 @login_required
 def savings_new():
@@ -568,9 +677,71 @@ def savings_new():
             return render_template("savings_form.html", error=error,
                                    form=request.form, title="Add Holding",
                                    category=request.form.get("category", category))
+        def do_append(holdings):
+            holdings.append(holding)
+        modify_savings(do_append)
         return redirect(url_for("savings"))
     return render_template("savings_form.html", form={"category": category},
                            title="Add Holding", category=category)
+
+
+@app.route("/savings/<hid>/edit", methods=["GET", "POST"])
+@login_required
+def savings_edit(hid):
+    holdings = read_savings()
+    holding = next((h for h in holdings if h.get("id") == hid), None)
+    if holding is None:
+        return redirect(url_for("savings"))
+    if request.method == "POST":
+        updated, error = _holding_from_form(request.form, existing=holding)
+        if error:
+            return render_template("savings_form.html", error=error,
+                                   form=request.form, holding=holding,
+                                   title="Edit Holding",
+                                   category=holding["category"])
+        def do_update(holdings):
+            for i, h in enumerate(holdings):
+                if h.get("id") == hid:
+                    holdings[i] = updated
+                    break
+        modify_savings(do_update)
+        return redirect(url_for("savings"))
+    return render_template("savings_form.html", form=dict(holding),
+                           holding=holding, title="Edit Holding",
+                           category=holding["category"])
+
+
+@app.route("/savings/<hid>/delete", methods=["POST"])
+@login_required
+def savings_delete(hid):
+    def do_delete(holdings):
+        holdings[:] = [h for h in holdings if h.get("id") != hid]
+    modify_savings(do_delete)
+    return redirect(url_for("savings"))
+
+
+@app.route("/savings/<hid>/shares", methods=["POST"])
+@login_required
+def savings_update_shares(hid):
+    shares_raw = request.form.get("shares", "").strip()
+    try:
+        shares = float(shares_raw)
+    except ValueError:
+        return jsonify({"error": "Invalid shares value"}), 400
+    updated_ts = datetime.now(timezone.utc).isoformat()
+    found = [False]
+    def do_update(holdings):
+        for h in holdings:
+            if h.get("id") == hid:
+                h["shares"] = shares
+                h["last_updated"] = updated_ts
+                found[0] = True
+                break
+    modify_savings(do_update)
+    if not found[0]:
+        return jsonify({"error": "Holding not found"}), 404
+    return jsonify({"ok": True, "shares": shares,
+                    "last_updated_rel": _relative_time(updated_ts)})
 
 
 # --- Test email ---

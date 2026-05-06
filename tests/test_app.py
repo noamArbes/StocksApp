@@ -987,3 +987,71 @@ def test_holding_from_form_invalid_category(client):
         "shares": "10", "cost_basis": "1000", "currency": "USD"
     }, follow_redirects=True)
     assert b"category" in resp.data.lower() or resp.status_code in (200, 400)
+
+
+@pytest.fixture
+def savings_client(tmp_path, monkeypatch):
+    alarms_file = tmp_path / "alarms.json"
+    alarms_file.write_text(json.dumps([]))
+    savings_file = tmp_path / "savings.json"
+    savings_file.write_text(json.dumps([]))
+    snapshots_file = tmp_path / "savings_snapshots.json"
+    snapshots_file.write_text(json.dumps([]))
+    monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
+    monkeypatch.setattr(app_module, "_SAVINGS_PATH", str(savings_file))
+    monkeypatch.setattr(app_module, "_SNAPSHOTS_PATH", str(snapshots_file))
+    monkeypatch.setattr(app_module, "_fetch_savings_prices", lambda h: {})
+    monkeypatch.setattr(app_module.checker, "get_usd_to_ils", lambda: 3.7)
+    flask_app.config["TESTING"] = True
+    with flask_app.test_client() as c:
+        yield c, savings_file
+
+
+def test_savings_page_loads(savings_client):
+    c, _ = savings_client
+    login(c)
+    resp = c.get("/savings")
+    assert resp.status_code == 200
+
+
+def test_savings_new_post_adds_holding(savings_client):
+    c, savings_file = savings_client
+    login(c)
+    resp = c.post("/savings/new", data={
+        "source": "yfinance", "ticker": "VOO", "name": "Vanguard",
+        "category": "etf", "shares": "10", "cost_basis": "5000",
+        "currency": "USD",
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+    holdings = json.loads(savings_file.read_text())
+    assert len(holdings) == 1
+    assert holdings[0]["ticker"] == "VOO"
+
+
+def test_savings_delete_removes_holding(savings_client):
+    c, savings_file = savings_client
+    savings_file.write_text(json.dumps([{"id": "abc123", "ticker": "VOO",
+        "category": "etf", "shares": 10, "cost_basis": 5000, "currency": "USD",
+        "source": "yfinance", "name": "Vanguard", "tase_id": "", "tase_type": "",
+        "last_updated": "2026-05-06T10:00:00+00:00"}]))
+    login(c)
+    resp = c.post("/savings/abc123/delete", follow_redirects=True)
+    assert resp.status_code == 200
+    holdings = json.loads(savings_file.read_text())
+    assert holdings == []
+
+
+def test_savings_inline_shares_update(savings_client):
+    c, savings_file = savings_client
+    savings_file.write_text(json.dumps([{"id": "abc123", "ticker": "VOO",
+        "category": "etf", "shares": 10, "cost_basis": 5000, "currency": "USD",
+        "source": "yfinance", "name": "Vanguard", "tase_id": "", "tase_type": "",
+        "last_updated": "2026-05-06T10:00:00+00:00"}]))
+    login(c)
+    resp = c.post("/savings/abc123/shares", data={"shares": "15.5"})
+    assert resp.status_code == 200
+    data = json.loads(resp.data)
+    assert data["ok"] is True
+    assert data["shares"] == 15.5
+    holdings = json.loads(savings_file.read_text())
+    assert holdings[0]["shares"] == 15.5
