@@ -10,9 +10,11 @@
 {# ── Tab bar ── #}
 <div class="tab-bar">
     <a href="{{ url_for('dashboard') }}"
-       class="tab {% if tab != 'history' %}tab-active{% endif %}">Alarms</a>
+       class="tab {% if tab not in ('history', 'savings') %}tab-active{% endif %}">Alarms</a>
     <a href="{{ url_for('dashboard', tab='history') }}"
        class="tab {% if tab == 'history' %}tab-active{% endif %}">Sell History</a>
+    <a href="{{ url_for('savings') }}"
+       class="tab {% if tab == 'savings' %}tab-active{% endif %}">Savings</a>
     {% if tab == 'history' %}
     <a href="{{ url_for('trade_new') }}" class="btn btn-primary" style="margin-left:auto">+ Add Trade</a>
     {% endif %}
@@ -398,4 +400,283 @@ document.getElementById('alarm-search').addEventListener('input', function() {
 });
 </script>
 {% endif %}
+
+{% if tab == 'savings' %}
+{# ══════════════════════════════════════════════════
+   SAVINGS TAB
+══════════════════════════════════════════════════ #}
+
+{# Summary cards #}
+<div class="savings-summary">
+
+    {# Total Portfolio #}
+    <div class="savings-stat-card">
+        <div class="savings-stat-label">Total Portfolio (ILS)</div>
+        {% if summary.total_value_ils %}
+        <div class="savings-stat-value-large">₪{{ "{:,.0f}".format(summary.total_value_ils) }}</div>
+        {% else %}
+        <div class="savings-stat-value-large">—</div>
+        {% endif %}
+        <div class="savings-stat-sub">across all categories</div>
+        {% if snapshots %}
+        <div class="savings-sparkline-wrap">
+            <svg class="savings-sparkline" viewBox="0 0 200 50" preserveAspectRatio="none">
+                {% set vals = snapshots | map(attribute='total_ils') | list %}
+                {% set mn = vals | min %}
+                {% set mx = vals | max %}
+                {% set rng = mx - mn if mx != mn else 1 %}
+                {% set n = vals | length %}
+                {% set pts = [] %}
+                {% for i in range(n) %}
+                    {% set x = (i / (n - 1) * 200) if n > 1 else 100 %}
+                    {% set y = 45 - ((vals[i] - mn) / rng * 40) %}
+                    {% if pts.append(x|string + ',' + y|string) %}{% endif %}
+                {% endfor %}
+                <polyline points="{{ pts | join(' ') }}"
+                    fill="none" stroke="#c8a96e" stroke-width="2"/>
+            </svg>
+        </div>
+        {% endif %}
+    </div>
+
+    {# Total P&L #}
+    <div class="savings-stat-card">
+        <div class="savings-stat-label">Total P&L (ILS)</div>
+        {% if summary.total_pl_ils is not none %}
+        <div class="savings-stat-amount {% if summary.total_pl_ils >= 0 %}value-positive{% else %}value-negative{% endif %}">
+            {{ "{:+,.0f}".format(summary.total_pl_ils) }} ₪
+        </div>
+        <div class="savings-stat-pct {% if summary.total_pl_ils >= 0 %}value-positive{% else %}value-negative{% endif %}">
+            {% if summary.total_pl_pct is not none %}{{ "%+.1f"|format(summary.total_pl_pct) }}%{% endif %}
+        </div>
+        {% else %}
+        <div class="savings-stat-amount">—</div>
+        {% endif %}
+        <div class="savings-stat-breakdown">
+            {% for cat in categories %}
+            <div class="savings-breakdown-row">
+                <span>{{ category_labels[cat] }}</span>
+                <span class="{% if cat_data[cat].pl_ils >= 0 %}value-positive{% else %}value-negative{% endif %}">
+                    {{ "{:+,.0f}".format(cat_data[cat].pl_ils) }} ₪
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# Today's Change #}
+    <div class="savings-stat-card">
+        <div class="savings-stat-label">Today's Change (ILS)</div>
+        {% if summary.total_today_ils is not none %}
+        <div class="savings-stat-amount {% if summary.total_today_ils >= 0 %}value-positive{% else %}value-negative{% endif %}">
+            {{ "{:+,.0f}".format(summary.total_today_ils) }} ₪
+        </div>
+        <div class="savings-stat-pct {% if summary.total_today_ils >= 0 %}value-positive{% else %}value-negative{% endif %}">
+            {% if summary.total_today_pct is not none %}{{ "%+.2f"|format(summary.total_today_pct) }}%{% endif %}
+        </div>
+        {% else %}
+        <div class="savings-stat-amount">—</div>
+        {% endif %}
+        <div class="savings-stat-breakdown">
+            {% for cat in categories %}
+            <div class="savings-breakdown-row">
+                <span>{{ category_labels[cat] }}</span>
+                <span class="{% if cat_data[cat].today_ils >= 0 %}value-positive{% else %}value-negative{% endif %}">
+                    {{ "{:+,.0f}".format(cat_data[cat].today_ils) }} ₪
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# Pie chart #}
+    {% set pie_colors = {'etf': '#6b4f2a', 'stocks': '#c8a96e', 'mmf': '#81c784'} %}
+    <div class="savings-stat-card savings-pie-card">
+        <div class="savings-stat-label">Allocation</div>
+        <svg viewBox="0 0 120 120" width="130" height="130">
+            {% for cat in categories %}
+            <circle cx="60" cy="60" r="40"
+                fill="none"
+                stroke="{{ pie_colors[cat] }}"
+                stroke-width="24"
+                stroke-dasharray="{{ pie[cat].dash }} {{ pie[cat].gap }}"
+                stroke-dashoffset="{{ pie[cat].offset }}"
+                transform="rotate(-90 60 60)"/>
+            {% endfor %}
+            <circle cx="60" cy="60" r="28" fill="white"/>
+            <text x="60" y="56" text-anchor="middle" font-size="9" fill="#7a6a5a">Total</text>
+            <text x="60" y="68" text-anchor="middle" font-size="10" fill="#2d2a24" font-weight="bold">
+                ₪{{ "{:,.0f}".format(summary.total_value_ils / 1000) if summary.total_value_ils else '0' }}k
+            </text>
+        </svg>
+        <div class="savings-pie-legend">
+            {% for cat in categories %}
+            <div class="savings-legend-item">
+                <span class="savings-legend-dot" style="background:{{ pie_colors[cat] }}"></span>
+                <span>{{ category_labels[cat] }} — {{ "%.1f"|format(cat_data[cat].pct_of_portfolio) }}%</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+{# Category sections #}
+{% set pie_colors = {'etf': '#6b4f2a', 'stocks': '#c8a96e', 'mmf': '#81c784'} %}
+{% for cat in categories %}
+{% set cat_holdings = holdings | selectattr('category', 'equalto', cat) | list %}
+{% set cd = cat_data[cat] %}
+<div class="savings-category">
+    <div class="savings-category-header" onclick="toggleCategory('{{ cat }}')">
+        <span class="savings-cat-dot" style="background:{{ pie_colors[cat] }}"></span>
+        <span class="savings-cat-title">{{ category_labels[cat] }}</span>
+        <div class="savings-cat-meta">
+            <span>
+                <span class="savings-meta-label">Value</span>
+                ₪{{ "{:,.0f}".format(cd.value_ils) }}
+            </span>
+            <span>
+                <span class="savings-meta-label">P&amp;L</span>
+                <span class="{% if cd.pl_ils >= 0 %}value-positive{% else %}value-negative{% endif %}">
+                    {{ "{:+,.0f}".format(cd.pl_ils) }} ₪
+                </span>
+            </span>
+            <span>
+                <span class="savings-meta-label">Today</span>
+                <span class="{% if cd.today_ils >= 0 %}value-positive{% else %}value-negative{% endif %}">
+                    {{ "{:+,.0f}".format(cd.today_ils) }} ₪
+                </span>
+            </span>
+            <span>
+                <span class="savings-meta-label">% of Portfolio</span>
+                {{ "%.1f"|format(cd.pct_of_portfolio) }}%
+            </span>
+        </div>
+        <span class="savings-toggle-arrow" id="arrow-{{ cat }}">▾</span>
+    </div>
+    <div id="cat-body-{{ cat }}">
+        {% if cat_holdings %}
+        <table class="savings-holdings-table">
+            <thead>
+                <tr>
+                    <th style="text-align:left">Name / Ticker</th>
+                    <th>Shares</th>
+                    <th>Cost Basis</th>
+                    <th>Price</th>
+                    <th>Value</th>
+                    <th>P&amp;L</th>
+                    <th>Today</th>
+                    <th>% of {{ category_labels[cat] }}</th>
+                    <th>Updated</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for h in cat_holdings %}
+            {% set hd = holding_data[h.id] %}
+            {% set curr = '₪' if h.currency == 'ILS' else '$' %}
+            <tr>
+                <td>
+                    <strong>{{ h.ticker }}</strong><br>
+                    <span class="savings-holding-name">{{ h.name }}</span>
+                </td>
+                <td>
+                    <span class="savings-inline-edit" data-hid="{{ h.id }}"
+                          onclick="startSharesEdit(this, {{ h.shares }})">
+                        {{ h.shares }} ✎
+                    </span>
+                    <form class="savings-shares-form" id="shares-form-{{ h.id }}"
+                          style="display:none" onsubmit="submitShares(event, '{{ h.id }}')">
+                        <input type="number" step="any" min="0" class="savings-shares-input"
+                               id="shares-input-{{ h.id }}" value="{{ h.shares }}">
+                        <button type="submit" class="btn-xs">✓</button>
+                        <button type="button" class="btn-xs" onclick="cancelSharesEdit('{{ h.id }}')">✕</button>
+                    </form>
+                </td>
+                <td>{{ curr }}{{ "{:,.2f}".format(h.cost_basis) }}</td>
+                <td>{% if hd.price is not none %}{{ curr }}{{ "{:,.2f}".format(hd.price) }}{% else %}—{% endif %}</td>
+                <td>{% if hd.current_value is not none %}{{ curr }}{{ "{:,.2f}".format(hd.current_value) }}{% else %}—{% endif %}</td>
+                <td class="{% if hd.pl_ils is not none and hd.pl_ils >= 0 %}value-positive{% elif hd.pl_ils is not none %}value-negative{% endif %}">
+                    {% if hd.pl_ils is not none %}
+                    {{ "{:+,.0f}".format(hd.pl_ils) }} ₪<br>
+                    <span style="font-size:0.75rem">{% if hd.pl_pct is not none %}{{ "%+.1f"|format(hd.pl_pct) }}%{% endif %}</span>
+                    {% else %}—{% endif %}
+                </td>
+                <td class="{% if hd.today_change_ils is not none and hd.today_change_ils >= 0 %}value-positive{% elif hd.today_change_ils is not none %}value-negative{% endif %}">
+                    {% if hd.today_change_ils is not none %}{{ "{:+,.0f}".format(hd.today_change_ils) }} ₪{% else %}—{% endif %}
+                </td>
+                <td>
+                    <div class="savings-pct-bar-wrap">
+                        <div class="savings-pct-bar" style="width:{{ [hd.pct_of_cat * 0.6, 60] | min | round }}px"></div>
+                        <span>{{ "%.0f"|format(hd.pct_of_cat) }}%</span>
+                    </div>
+                </td>
+                <td><span class="savings-updated">{{ hd.last_updated_rel }}</span></td>
+                <td>
+                    <div class="savings-actions">
+                        <a href="{{ url_for('savings_edit', hid=h.id) }}" class="btn-xs">Edit</a>
+                        <form method="post" action="{{ url_for('savings_delete', hid=h.id) }}"
+                              style="display:inline"
+                              onsubmit="return confirm('Delete {{ h.ticker }}?')">
+                            <button type="submit" class="btn-xs danger">×</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        <div class="savings-add-row">
+            <a href="{{ url_for('savings_new', category=cat) }}" class="btn-xs">+ Add {{ category_labels[cat][:-1] if cat != 'mmf' else 'MMF' }}</a>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<script>
+function toggleCategory(cat) {
+    const body = document.getElementById('cat-body-' + cat);
+    const arrow = document.getElementById('arrow-' + cat);
+    const hidden = body.style.display === 'none';
+    body.style.display = hidden ? '' : 'none';
+    arrow.textContent = hidden ? '▾' : '▸';
+}
+
+function startSharesEdit(el, current) {
+    const hid = el.dataset.hid;
+    el.style.display = 'none';
+    const form = document.getElementById('shares-form-' + hid);
+    form.style.display = 'inline-flex';
+    const input = document.getElementById('shares-input-' + hid);
+    input.focus();
+    input.select();
+}
+
+function cancelSharesEdit(hid) {
+    document.getElementById('shares-form-' + hid).style.display = 'none';
+    document.querySelector('[data-hid="' + hid + '"]').style.display = '';
+}
+
+function submitShares(event, hid) {
+    event.preventDefault();
+    const input = document.getElementById('shares-input-' + hid);
+    const shares = input.value;
+    fetch('/savings/' + hid + '/shares', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'shares=' + encodeURIComponent(shares),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            const el = document.querySelector('[data-hid="' + hid + '"]');
+            el.textContent = shares + ' ✎';
+            el.style.display = '';
+            document.getElementById('shares-form-' + hid).style.display = 'none';
+        }
+    });
+}
+</script>
+
+{% endif %}{# end savings tab #}
 {% endblock %}

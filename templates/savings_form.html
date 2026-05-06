@@ -1,12 +1,180 @@
 {% extends "base.html" %}
 {% block content %}
-<p>{% if error %}<span class="error">{{ error }}</span>{% endif %}</p>
-<form method="post">
-  <input name="ticker" value="{{ form.get('ticker','') }}">
-  <input name="category" value="{{ form.get('category','') }}">
-  <input name="shares" value="{{ form.get('shares','') }}">
-  <input name="cost_basis" value="{{ form.get('cost_basis','') }}">
-  <input name="source" value="{{ form.get('source','yfinance') }}">
-  <button type="submit">Save</button>
-</form>
+<div class="form-card">
+    <h2>{{ title }}</h2>
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    <form method="post" id="savings-form">
+
+        <input type="hidden" name="category" value="{{ category }}">
+        <div style="margin-bottom:1rem">
+            <span class="form-label">Category</span>
+            <div class="market-toggle">
+                <button type="button" class="btn {% if category == 'etf' %}btn-primary{% endif %}" disabled>ETF</button>
+                <button type="button" class="btn {% if category == 'stocks' %}btn-primary{% endif %}" disabled>Stock</button>
+                <button type="button" class="btn {% if category == 'mmf' %}btn-primary{% endif %}" disabled>MMF</button>
+            </div>
+        </div>
+
+        {% set is_tase = form.get('source') == 'tase' %}
+        {% if not holding %}
+        <div class="market-toggle" id="market-toggle">
+            <button type="button" class="btn {% if not is_tase %}btn-primary{% endif %}" id="toggle-us">US</button>
+            <button type="button" class="btn {% if is_tase %}btn-primary{% endif %}" id="toggle-il">Israeli</button>
+        </div>
+        {% else %}
+        <div class="market-toggle">
+            <button type="button" class="btn {% if not is_tase %}btn-primary{% endif %}" disabled>US</button>
+            <button type="button" class="btn {% if is_tase %}btn-primary{% endif %}" disabled>Israeli</button>
+        </div>
+        {% endif %}
+
+        <input type="hidden" name="source" id="source-hidden" value="{{ form.get('source', 'yfinance') }}">
+        <input type="hidden" name="tase_id" id="tase-id-hidden" value="{{ form.get('tase_id', '') }}">
+        <input type="hidden" name="tase_type" id="tase-type-hidden" value="{{ form.get('tase_type', '') }}">
+
+        <label id="label-ticker">
+            <span id="ticker-label-text">{% if is_tase %}Search Israeli Security{% else %}Ticker{% endif %}</span>
+            <input type="text" name="ticker" id="ticker-input"
+                value="{{ form.get('ticker', '') }}"
+                placeholder="{% if is_tase %}e.g. מגדל or Migdal{% else %}e.g. VOO{% endif %}"
+                autocomplete="off"
+                {% if holding %}readonly{% endif %}>
+            {% if not holding %}
+            <div class="autocomplete-dropdown" id="ticker-dropdown"></div>
+            {% endif %}
+        </label>
+
+        <label>Name — optional, auto-filled for US tickers
+            <input type="text" name="name" id="name-input"
+                value="{{ form.get('name', '') }}"
+                placeholder="e.g. Vanguard S&P 500 ETF">
+        </label>
+
+        <label>Shares owned
+            <input type="number" step="any" min="0" name="shares"
+                value="{{ form.get('shares', '') }}"
+                placeholder="e.g. 23.5" required>
+        </label>
+
+        <label>Total cost basis (what you paid in total)
+            <input type="number" step="0.01" min="0" name="cost_basis"
+                value="{{ form.get('cost_basis', '') }}"
+                placeholder="e.g. 8200.00" required>
+        </label>
+
+        <div id="currency-field" {% if is_tase %}style="display:none"{% endif %}>
+            <label>Currency
+                <select name="currency">
+                    <option value="USD" {% if form.get('currency', 'USD') == 'USD' %}selected{% endif %}>USD</option>
+                    <option value="ILS" {% if form.get('currency') == 'ILS' %}selected{% endif %}>ILS</option>
+                </select>
+            </label>
+        </div>
+        <input type="hidden" name="currency" id="currency-hidden"
+            value="{{ 'ILS' if is_tase else form.get('currency', 'USD') }}">
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save</button>
+            <a href="{{ url_for('savings') }}" class="btn">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+(function() {
+    const toggleUs = document.getElementById('toggle-us');
+    const toggleIl = document.getElementById('toggle-il');
+    const sourceHidden = document.getElementById('source-hidden');
+    const taseIdHidden = document.getElementById('tase-id-hidden');
+    const taseTypeHidden = document.getElementById('tase-type-hidden');
+    const tickerInput = document.getElementById('ticker-input');
+    const tickerLabel = document.getElementById('ticker-label-text');
+    const tickerDropdown = document.getElementById('ticker-dropdown');
+    const currencyField = document.getElementById('currency-field');
+    const currencyHidden = document.getElementById('currency-hidden');
+    const nameInput = document.getElementById('name-input');
+
+    if (!toggleUs) return;
+
+    function setMarket(isTase) {
+        sourceHidden.value = isTase ? 'tase' : 'yfinance';
+        tickerLabel.textContent = isTase ? 'Search Israeli Security' : 'Ticker';
+        tickerInput.placeholder = isTase ? 'e.g. מגדל or Migdal' : 'e.g. VOO';
+        tickerInput.value = '';
+        taseIdHidden.value = '';
+        taseTypeHidden.value = '';
+        tickerDropdown.innerHTML = '';
+        tickerDropdown.style.display = 'none';
+        if (currencyField) currencyField.style.display = isTase ? 'none' : '';
+        currencyHidden.value = isTase ? 'ILS' : 'USD';
+        toggleUs.classList.toggle('btn-primary', !isTase);
+        toggleIl.classList.toggle('btn-primary', isTase);
+    }
+
+    toggleUs.addEventListener('click', () => setMarket(false));
+    toggleIl.addEventListener('click', () => setMarket(true));
+
+    let usTimeout;
+    tickerInput.addEventListener('input', function() {
+        if (sourceHidden.value === 'tase') return;
+        clearTimeout(usTimeout);
+        const q = this.value.trim();
+        if (q.length < 1) { tickerDropdown.style.display = 'none'; return; }
+        usTimeout = setTimeout(() => {
+            fetch('/ticker-search?q=' + encodeURIComponent(q))
+                .then(r => r.json()).then(results => {
+                    tickerDropdown.innerHTML = '';
+                    if (!results.length) { tickerDropdown.style.display = 'none'; return; }
+                    results.forEach(r => {
+                        const div = document.createElement('div');
+                        div.className = 'autocomplete-item';
+                        div.textContent = r.symbol + (r.name ? ' — ' + r.name : '');
+                        div.addEventListener('click', () => {
+                            tickerInput.value = r.symbol;
+                            if (nameInput && !nameInput.value) nameInput.value = r.name || '';
+                            tickerDropdown.style.display = 'none';
+                        });
+                        tickerDropdown.appendChild(div);
+                    });
+                    tickerDropdown.style.display = 'block';
+                });
+        }, 200);
+    });
+
+    let taseTimeout;
+    tickerInput.addEventListener('input', function() {
+        if (sourceHidden.value !== 'tase') return;
+        clearTimeout(taseTimeout);
+        const q = this.value.trim();
+        if (q.length < 2) { tickerDropdown.style.display = 'none'; return; }
+        taseTimeout = setTimeout(() => {
+            fetch('/api/tase-search?q=' + encodeURIComponent(q))
+                .then(r => r.json()).then(results => {
+                    tickerDropdown.innerHTML = '';
+                    if (!results.length) { tickerDropdown.style.display = 'none'; return; }
+                    results.forEach(r => {
+                        const div = document.createElement('div');
+                        div.className = 'autocomplete-item';
+                        div.textContent = r.name + (r.ticker ? ' (' + r.ticker + ')' : '');
+                        div.addEventListener('click', () => {
+                            tickerInput.value = r.name;
+                            if (nameInput && !nameInput.value) nameInput.value = r.name || '';
+                            taseIdHidden.value = r.id;
+                            taseTypeHidden.value = r.type;
+                            tickerDropdown.style.display = 'none';
+                        });
+                        tickerDropdown.appendChild(div);
+                    });
+                    tickerDropdown.style.display = 'block';
+                });
+        }, 200);
+    });
+
+    document.addEventListener('click', e => {
+        if (!tickerDropdown.contains(e.target) && e.target !== tickerInput) {
+            tickerDropdown.style.display = 'none';
+        }
+    });
+})();
+</script>
 {% endblock %}
