@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<p>{% if error %}<span class="error">{{ error }}</span>{% endif %}</p>
+<form method="post">
+  <input name="ticker" value="{{ form.get('ticker','') }}">
+  <input name="category" value="{{ form.get('category','') }}">
+  <input name="shares" value="{{ form.get('shares','') }}">
+  <input name="cost_basis" value="{{ form.get('cost_basis','') }}">
+  <input name="source" value="{{ form.get('source','yfinance') }}">
+  <button type="submit">Save</button>
+</form>
+{% endblock %}

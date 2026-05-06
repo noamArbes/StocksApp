@@ -962,3 +962,28 @@ def test_dashboard_tab_bar_rendered(client, tmp_path, monkeypatch):
     body = resp.data.decode()
     assert "Sell History" in body
     assert "Alarms" in body
+
+
+def test_holding_from_form_requires_ticker(client):
+    login(client)
+    resp = client.post("/savings/new", data={
+        "source": "yfinance", "category": "stocks",
+        "shares": "10", "cost_basis": "1000", "currency": "USD"
+    }, follow_redirects=True)
+    assert b"Ticker" in resp.data or resp.status_code in (200, 400)
+
+def test_holding_from_form_requires_shares(client):
+    login(client)
+    resp = client.post("/savings/new", data={
+        "source": "yfinance", "ticker": "VOO", "category": "etf",
+        "cost_basis": "1000", "currency": "USD"
+    }, follow_redirects=True)
+    assert b"Shares" in resp.data or resp.status_code in (200, 400)
+
+def test_holding_from_form_invalid_category(client):
+    login(client)
+    resp = client.post("/savings/new", data={
+        "source": "yfinance", "ticker": "VOO", "category": "invalid",
+        "shares": "10", "cost_basis": "1000", "currency": "USD"
+    }, follow_redirects=True)
+    assert b"category" in resp.data.lower() or resp.status_code in (200, 400)

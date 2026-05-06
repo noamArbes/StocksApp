@@ -29,6 +29,8 @@ app.secret_key = _SECRET_KEY
 _lock = threading.Lock()
 _ALARMS_PATH = checker.get_alarms_path()  # sync local→volume once at startup
 _TRADES_PATH = checker.get_trades_path()
+_SAVINGS_PATH = checker.get_savings_path()
+_SNAPSHOTS_PATH = checker.get_snapshots_path()
 _tase_cache = tase.load_securities_cache()
 
 
@@ -80,6 +82,154 @@ def modify_trades(fn):
         trades = checker.load_trades(path)
         fn(trades)
         checker.save_trades(trades, path)
+
+
+def _savings_path():
+    return _SAVINGS_PATH
+
+
+def _snapshots_path():
+    return _SNAPSHOTS_PATH
+
+
+def read_savings():
+    with _lock:
+        return checker.load_savings(_savings_path())
+
+
+def write_savings(holdings):
+    with _lock:
+        checker.save_savings(holdings, _savings_path())
+
+
+def modify_savings(fn):
+    with _lock:
+        path = _savings_path()
+        holdings = checker.load_savings(path)
+        fn(holdings)
+        checker.save_savings(holdings, path)
+
+
+def read_snapshots():
+    with _lock:
+        return checker.load_snapshots(_snapshots_path())
+
+
+def _relative_time(iso_str: str) -> str:
+    if not iso_str:
+        return "—"
+    try:
+        dt = datetime.fromisoformat(iso_str)
+        diff = datetime.now(timezone.utc) - dt
+        secs = diff.total_seconds()
+        if secs < 60:
+            return "just now"
+        if secs < 3600:
+            return f"{int(secs / 60)}m ago"
+        if secs < 86400:
+            return f"{int(secs / 3600)}h ago"
+        return f"{int(secs / 86400)}d ago"
+    except Exception:
+        return "—"
+
+
+def _fetch_savings_prices(holdings: list) -> dict:
+    """Returns {ticker: {"price": float|None, "prev_close": float|None}}.
+    TASE holdings get prev_close=None (not available from TASE API)."""
+    prices = {}
+    for h in holdings:
+        ticker = h.get("ticker")
+        if not ticker or ticker in prices:
+            continue
+        try:
+            if h.get("source") == "tase":
+                price = tase.get_price(h["tase_id"], h["tase_type"])
+                prices[ticker] = {"price": price, "prev_close": None}
+            else:
+                price, prev = checker.get_price_with_change(ticker)
+                prices[ticker] = {"price": price, "prev_close": prev}
+        except Exception:
+            prices[ticker] = {"price": None, "prev_close": None}
+    return prices
+
+
+def _holding_from_form(form, existing=None):
+    """Parse and validate holding form data. Returns (holding_dict, error_str|None)."""
+    import uuid
+
+    source = form.get("source", "yfinance")
+    is_tase = source == "tase"
+
+    ticker_raw = form.get("ticker", "").strip()
+    if not ticker_raw:
+        return None, "Ticker is required"
+    ticker = ticker_raw if is_tase else ticker_raw.upper()
+
+    tase_id = form.get("tase_id", "").strip() if is_tase else ""
+    tase_type = form.get("tase_type", "").strip() if is_tase else ""
+    if is_tase and not tase_id:
+        return None, "Please select a security from the dropdown"
+
+    name = form.get("name", "").strip() or ticker
+
+    category = form.get("category", "").strip()
+    if category not in ("stocks", "etf", "mmf"):
+        return None, "Invalid category"
+
+    shares_raw = form.get("shares", "").strip()
+    if not shares_raw:
+        return None, "Shares is required"
+    try:
+        shares = float(shares_raw)
+    except ValueError:
+        return None, "Shares must be a number"
+
+    cost_raw = form.get("cost_basis", "").strip()
+    if not cost_raw:
+        return None, "Cost basis is required"
+    try:
+        cost_basis = float(cost_raw)
+    except ValueError:
+        return None, "Cost basis must be a number"
+
+    currency = "ILS" if is_tase else form.get("currency", "USD")
+
+    return {
+        "id": existing["id"] if existing else str(uuid.uuid4())[:8],
+        "name": name,
+        "category": category,
+        "source": source,
+        "ticker": ticker,
+        "tase_id": tase_id,
+        "tase_type": tase_type,
+        "shares": shares,
+        "cost_basis": cost_basis,
+        "currency": currency,
+        "last_updated": datetime.now(timezone.utc).isoformat(),
+    }, None
+
+
+def _maybe_record_snapshot(holdings: list, prices: dict, usd_to_ils: float) -> None:
+    """Appends a daily total-ILS snapshot if today's entry is not yet recorded."""
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    with _lock:
+        path = _snapshots_path()
+        snapshots = checker.load_snapshots(path)
+        if snapshots and snapshots[-1].get("date") == today_str:
+            return
+        total_ils = 0.0
+        for h in holdings:
+            ticker = h.get("ticker")
+            pinfo = prices.get(ticker, {})
+            price = pinfo.get("price")
+            if price is None:
+                continue
+            shares = h.get("shares") or 0
+            rate = usd_to_ils if h.get("currency") == "USD" else 1.0
+            total_ils += price * shares * rate
+        snapshots.append({"date": today_str, "total_ils": round(total_ils, 2)})
+        snapshots = snapshots[-90:]
+        checker.save_snapshots(snapshots, path)
 
 
 def login_required(f):
@@ -404,6 +554,23 @@ def alarm_record_sale(alarm_id):
     }
     return render_template("trade_form.html", form=form_data, title="Record Sale",
                            is_record_sale=True, trade=alarm)
+
+
+# --- Savings ---
+
+@app.route("/savings/new", methods=["GET", "POST"])
+@login_required
+def savings_new():
+    category = request.args.get("category", "stocks")
+    if request.method == "POST":
+        holding, error = _holding_from_form(request.form)
+        if error:
+            return render_template("savings_form.html", error=error,
+                                   form=request.form, title="Add Holding",
+                                   category=request.form.get("category", category))
+        return redirect(url_for("savings"))
+    return render_template("savings_form.html", form={"category": category},
+                           title="Add Holding", category=category)
 
 
 # --- Test email ---
