@@ -105,6 +105,10 @@ VOLUME_PATH = "/data/alarms.json"
 LOCAL_PATH = "alarms.json"
 TRADES_LOCAL_PATH = "trades.json"
 TRADES_VOLUME_PATH = "/data/trades.json"
+SAVINGS_LOCAL_PATH = "savings.json"
+SAVINGS_VOLUME_PATH = "/data/savings.json"
+SNAPSHOTS_LOCAL_PATH = "savings_snapshots.json"
+SNAPSHOTS_VOLUME_PATH = "/data/savings_snapshots.json"
 
 
 def get_alarms_path() -> str:
@@ -143,6 +147,20 @@ def get_trades_path() -> str:
     return TRADES_LOCAL_PATH
 
 
+def get_savings_path() -> str:
+    """Returns the path to savings.json — volume path on Railway, local path otherwise."""
+    if os.path.isdir("/data"):
+        return SAVINGS_VOLUME_PATH
+    return SAVINGS_LOCAL_PATH
+
+
+def get_snapshots_path() -> str:
+    """Returns the path to savings_snapshots.json — volume path on Railway, local path otherwise."""
+    if os.path.isdir("/data"):
+        return SNAPSHOTS_VOLUME_PATH
+    return SNAPSHOTS_LOCAL_PATH
+
+
 def load_trades(path: str) -> list:
     if not os.path.exists(path):
         return []
@@ -158,6 +176,40 @@ def save_trades(trades: list, path: str) -> None:
     os.replace(tmp_path, path)
 
 
+def load_savings(path: str) -> list:
+    """Loads savings data from a JSON file. Returns empty list if file missing."""
+    if not os.path.exists(path):
+        return []
+    with open(path, "r") as f:
+        return json.load(f)
+
+
+def save_savings(holdings: list, path: str) -> None:
+    """Saves savings data to a JSON file atomically."""
+    dir_name = os.path.dirname(path) or "."
+    with tempfile.NamedTemporaryFile("w", dir=dir_name, delete=False, suffix=".tmp") as f:
+        json.dump(holdings, f, indent=2)
+        tmp_path = f.name
+    os.replace(tmp_path, path)
+
+
+def load_snapshots(path: str) -> list:
+    """Loads snapshot data from a JSON file. Returns empty list if file missing."""
+    if not os.path.exists(path):
+        return []
+    with open(path, "r") as f:
+        return json.load(f)
+
+
+def save_snapshots(snapshots: list, path: str) -> None:
+    """Saves snapshot data to a JSON file atomically."""
+    dir_name = os.path.dirname(path) or "."
+    with tempfile.NamedTemporaryFile("w", dir=dir_name, delete=False, suffix=".tmp") as f:
+        json.dump(snapshots, f, indent=2)
+        tmp_path = f.name
+    os.replace(tmp_path, path)
+
+
 def get_price(ticker: str) -> float:
     """Fetches the latest price for a ticker from Yahoo Finance.
     Raises ValueError if the price cannot be retrieved."""
@@ -166,6 +218,28 @@ def get_price(ticker: str) -> float:
     if price is None:
         raise ValueError(f"Could not fetch price for ticker: {ticker}")
     return float(price)
+
+
+def get_price_with_change(ticker: str) -> tuple:
+    """Returns (last_price, previous_close) for a yfinance ticker.
+    Returns (None, None) on any failure."""
+    try:
+        info = yf.Ticker(ticker).fast_info
+        price = float(info.last_price) if info.last_price is not None else None
+        prev = float(info.previous_close) if info.previous_close is not None else None
+        return price, prev
+    except Exception:
+        return None, None
+
+
+def get_usd_to_ils() -> float:
+    """Returns the current USD→ILS exchange rate from yfinance. Falls back to 3.7."""
+    try:
+        info = yf.Ticker("USDILS=X").fast_info
+        rate = info.last_price
+        return float(rate) if rate else 3.7
+    except Exception:
+        return 3.7
 
 
 def send_email(subject: str, body: str, to: str | list, api_key: str, sender: str) -> None:

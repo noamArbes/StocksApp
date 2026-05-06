@@ -468,3 +468,41 @@ def test_save_trades_writes_valid_json():
         assert data[0]["ticker"] == "TSLA"
     finally:
         os.unlink(path)
+
+
+# --- load_savings / save_savings tests ---
+
+def test_load_savings_returns_empty_list_when_file_missing(tmp_path):
+    path = str(tmp_path / "savings.json")
+    assert checker.load_savings(path) == []
+
+
+def test_save_and_load_savings_round_trips(tmp_path):
+    path = str(tmp_path / "savings.json")
+    holdings = [{"id": "abc", "ticker": "VOO", "shares": 10.0}]
+    checker.save_savings(holdings, path)
+    assert checker.load_savings(path) == holdings
+
+
+def test_load_snapshots_returns_empty_list_when_file_missing(tmp_path):
+    path = str(tmp_path / "snapshots.json")
+    assert checker.load_snapshots(path) == []
+
+
+def test_save_and_load_snapshots_round_trips(tmp_path):
+    path = str(tmp_path / "snapshots.json")
+    snaps = [{"date": "2026-05-06", "total_ils": 12345.0}]
+    checker.save_snapshots(snaps, path)
+    assert checker.load_snapshots(path) == snaps
+
+
+def test_get_savings_path_returns_local_when_no_data_dir(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    path = checker.get_savings_path()
+    assert path == "savings.json"
+
+
+def test_get_snapshots_path_returns_local_when_no_data_dir(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    path = checker.get_snapshots_path()
+    assert path == "savings_snapshots.json"
