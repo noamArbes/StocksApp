@@ -96,15 +96,18 @@
 
         <label id="label-email">Email(s) — comma-separated for multiple
             <input type="text" name="email" id="email-input"
-                value="{{ form.get('email', '') }}"
+                value="{{ form.get('email', '') if alarm else (form.get('email') or 'noamarbes1@gmail.com') }}"
                 placeholder="you@example.com">
         </label>
 
         <label id="label-city">City (for timezone) *
-            <input type="text" id="city-input" autocomplete="off" placeholder="e.g. Tel Aviv">
+            <input type="text" id="city-input" autocomplete="off"
+                placeholder="e.g. Tel Aviv"
+                value="{{ '' if alarm else 'Tel Aviv' }}">
             <div class="autocomplete-dropdown" id="city-dropdown"></div>
         </label>
-        <input type="hidden" name="timezone" id="timezone-hidden" value="{{ form.get('timezone') or '' }}">
+        <input type="hidden" name="timezone" id="timezone-hidden"
+            value="{{ form.get('timezone') or ('' if alarm else 'Asia/Jerusalem') }}">
 
         <label>Re-alert cooldown — minimum time between repeat alerts
             <select name="snooze_hours">
