@@ -641,6 +641,7 @@ form label { position: relative; }
     font-weight: 700;
     font-size: 1rem;
     flex: 1;
+    color: #2d2a24;
 }
 
 .savings-cat-meta {

@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
+{% if tab not in ('history', 'savings') %}
 <div class="toolbar">
     <h2>Alarms</h2>
-    {% if tab != 'history' %}
     <a href="{{ url_for('alarm_new') }}" class="btn btn-primary">+ Add</a>
-    {% endif %}
 </div>
+{% endif %}
 
 {# ── Tab bar ── #}
 <div class="tab-bar">
@@ -120,7 +120,7 @@
 <p class="empty">No trades yet. <a href="{{ url_for('trade_new') }}">Add one</a>.</p>
 {% endif %}
 
-{% else %}
+{% elif tab != 'savings' %}
 {# ══════════════════════════════════════════════════
    ALARMS TAB
 ══════════════════════════════════════════════════ #}
@@ -260,7 +260,7 @@
 {% endblock %}
 
 {% block scripts %}
-{% if tab != 'history' %}
+{% if tab not in ('history', 'savings') %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script>
 const _charts = {};
