@@ -765,6 +765,26 @@ form label { position: relative; }
     border-top: 1px solid #e0d8cc;
 }
 
+.savings-add-row a.btn-xs {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.35rem 0.9rem;
+    background: #5c7a3e;
+    color: #fff;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.savings-add-row a.btn-xs:hover {
+    background: #4a6330;
+}
+
 @media (max-width: 900px) {
     .savings-summary {
         grid-template-columns: 1fr 1fr;

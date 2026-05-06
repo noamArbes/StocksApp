@@ -50,19 +50,23 @@
                 placeholder="e.g. Vanguard S&P 500 ETF">
         </label>
 
+        {% if category == 'etf' %}
+        <label>Current value (total value today)
+            <input type="number" step="any" min="0.01" name="current_value"
+                value="{{ form.get('current_value', '') }}"
+                placeholder="e.g. 5200.00" required>
+        </label>
+        <label>Total change since purchase (+ for gain, − for loss)
+            <input type="number" step="any" name="total_change"
+                value="{{ form.get('total_change', '') }}"
+                placeholder="e.g. 200 or -300" required>
+        </label>
+        {% else %}
         <label>Shares owned
             <input type="number" step="any" min="0" name="shares"
                 value="{{ form.get('shares', '') }}"
                 placeholder="e.g. 23.5" required>
         </label>
-
-        {% if category == 'etf' %}
-        <label>Total gain/loss % since purchase
-            <input type="number" step="any" name="pl_pct"
-                value="{{ form.get('pl_pct', '') }}"
-                placeholder="e.g. 15 for +15%, -8 for -8%" required>
-        </label>
-        {% else %}
         <label>Total cost basis (what you paid in total)
             <input type="number" step="0.01" min="0" name="cost_basis"
                 value="{{ form.get('cost_basis', '') }}"

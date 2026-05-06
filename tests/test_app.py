@@ -989,58 +989,60 @@ def test_holding_from_form_invalid_category(client):
     assert b"category" in resp.data.lower() or resp.status_code in (200, 400)
 
 
-def test_holding_from_form_etf_derives_cost_basis_from_pnl(monkeypatch):
+def test_holding_from_form_etf_derives_cost_basis_from_value_and_change(monkeypatch):
     import app as app_module
     from werkzeug.datastructures import ImmutableMultiDict
     monkeypatch.setattr(app_module.checker, "get_price_with_change", lambda t: (100.0, 99.0))
     form = ImmutableMultiDict([
         ("source", "yfinance"), ("ticker", "VOO"), ("name", "Vanguard"),
-        ("category", "etf"), ("shares", "10"), ("pl_pct", "25"), ("currency", "USD"),
+        ("category", "etf"), ("current_value", "1000"), ("total_change", "200"), ("currency", "USD"),
     ])
     holding, error = app_module._holding_from_form(form)
     assert error is None
-    # cost_basis = (100.0 * 10) / (1 + 25/100) = 1000 / 1.25 = 800.0
+    # cost_basis = 1000 - 200 = 800, shares = 1000 / 100 = 10
     assert abs(holding["cost_basis"] - 800.0) < 0.01
+    assert abs(holding["shares"] - 10.0) < 0.01
 
 
-def test_holding_from_form_etf_negative_pnl(monkeypatch):
+def test_holding_from_form_etf_negative_change(monkeypatch):
     import app as app_module
     from werkzeug.datastructures import ImmutableMultiDict
     monkeypatch.setattr(app_module.checker, "get_price_with_change", lambda t: (90.0, 91.0))
     form = ImmutableMultiDict([
         ("source", "yfinance"), ("ticker", "QQQ"), ("name", "Invesco"),
-        ("category", "etf"), ("shares", "5"), ("pl_pct", "-10"), ("currency", "USD"),
+        ("category", "etf"), ("current_value", "450"), ("total_change", "-50"), ("currency", "USD"),
     ])
     holding, error = app_module._holding_from_form(form)
     assert error is None
-    # cost_basis = (90.0 * 5) / (1 + (-10)/100) = 450 / 0.9 = 500.0
+    # cost_basis = 450 - (-50) = 500, shares = 450 / 90 = 5
     assert abs(holding["cost_basis"] - 500.0) < 0.01
+    assert abs(holding["shares"] - 5.0) < 0.01
 
 
-def test_holding_from_form_etf_pnl_missing(monkeypatch):
+def test_holding_from_form_etf_current_value_missing(monkeypatch):
     import app as app_module
     from werkzeug.datastructures import ImmutableMultiDict
     monkeypatch.setattr(app_module.checker, "get_price_with_change", lambda t: (100.0, 99.0))
     form = ImmutableMultiDict([
         ("source", "yfinance"), ("ticker", "VOO"), ("name", "Vanguard"),
-        ("category", "etf"), ("shares", "10"), ("currency", "USD"),
+        ("category", "etf"), ("total_change", "200"), ("currency", "USD"),
     ])
     holding, error = app_module._holding_from_form(form)
     assert holding is None
-    assert "gain/loss" in error.lower() or "%" in error
+    assert "current value" in error.lower()
 
 
-def test_holding_from_form_etf_pnl_non_numeric(monkeypatch):
+def test_holding_from_form_etf_total_change_missing(monkeypatch):
     import app as app_module
     from werkzeug.datastructures import ImmutableMultiDict
     monkeypatch.setattr(app_module.checker, "get_price_with_change", lambda t: (100.0, 99.0))
     form = ImmutableMultiDict([
         ("source", "yfinance"), ("ticker", "VOO"), ("name", "Vanguard"),
-        ("category", "etf"), ("shares", "10"), ("pl_pct", "abc"), ("currency", "USD"),
+        ("category", "etf"), ("current_value", "1000"), ("currency", "USD"),
     ])
     holding, error = app_module._holding_from_form(form)
     assert holding is None
-    assert "gain/loss" in error.lower() or "%" in error
+    assert "total change" in error.lower()
 
 
 def test_holding_from_form_etf_tase_derives_cost_basis(monkeypatch):
@@ -1051,38 +1053,26 @@ def test_holding_from_form_etf_tase_derives_cost_basis(monkeypatch):
     form = ImmutableMultiDict([
         ("source", "tase"), ("ticker", "מגדל"), ("name", "Migdal Fund"),
         ("tase_id", "1234567"), ("tase_type", "fund"),
-        ("category", "etf"), ("shares", "20"), ("pl_pct", "25"), ("currency", "ILS"),
+        ("category", "etf"), ("current_value", "1000"), ("total_change", "200"), ("currency", "ILS"),
     ])
     holding, error = app_module._holding_from_form(form)
     assert error is None
-    # cost_basis = (50.0 * 20) / (1 + 25/100) = 1000 / 1.25 = 800.0
+    # cost_basis = 1000 - 200 = 800, shares = 1000 / 50 = 20
     assert abs(holding["cost_basis"] - 800.0) < 0.01
+    assert abs(holding["shares"] - 20.0) < 0.01
 
 
-def test_holding_from_form_etf_pnl_minus_100(monkeypatch):
+def test_holding_from_form_etf_change_equals_value(monkeypatch):
     import app as app_module
     from werkzeug.datastructures import ImmutableMultiDict
     monkeypatch.setattr(app_module.checker, "get_price_with_change", lambda t: (100.0, 99.0))
     form = ImmutableMultiDict([
         ("source", "yfinance"), ("ticker", "VOO"), ("name", "Vanguard"),
-        ("category", "etf"), ("shares", "10"), ("pl_pct", "-100"), ("currency", "USD"),
+        ("category", "etf"), ("current_value", "1000"), ("total_change", "1000"), ("currency", "USD"),
     ])
     holding, error = app_module._holding_from_form(form)
     assert holding is None
-    assert "-100" in error or "cannot be" in error.lower()
-
-
-def test_holding_from_form_etf_pnl_near_minus_100(monkeypatch):
-    import app as app_module
-    from werkzeug.datastructures import ImmutableMultiDict
-    monkeypatch.setattr(app_module.checker, "get_price_with_change", lambda t: (100.0, 99.0))
-    form = ImmutableMultiDict([
-        ("source", "yfinance"), ("ticker", "VOO"), ("name", "Vanguard"),
-        ("category", "etf"), ("shares", "10"), ("pl_pct", "-100.5"), ("currency", "USD"),
-    ])
-    holding, error = app_module._holding_from_form(form)
-    assert holding is None
-    assert error is not None
+    assert "cannot" in error.lower() or "equal" in error.lower() or "greater" in error.lower()
 
 
 def test_holding_from_form_etf_price_fetch_fails(monkeypatch):
@@ -1091,7 +1081,7 @@ def test_holding_from_form_etf_price_fetch_fails(monkeypatch):
     monkeypatch.setattr(app_module.checker, "get_price_with_change", lambda t: (None, None))
     form = ImmutableMultiDict([
         ("source", "yfinance"), ("ticker", "VOO"), ("name", "Vanguard"),
-        ("category", "etf"), ("shares", "10"), ("pl_pct", "15"), ("currency", "USD"),
+        ("category", "etf"), ("current_value", "1000"), ("total_change", "200"), ("currency", "USD"),
     ])
     holding, error = app_module._holding_from_form(form)
     assert holding is None
@@ -1153,7 +1143,7 @@ def test_savings_new_post_adds_holding(savings_client, monkeypatch):
     login(c)
     resp = c.post("/savings/new", data={
         "source": "yfinance", "ticker": "VOO", "name": "Vanguard",
-        "category": "etf", "shares": "10", "pl_pct": "0",
+        "category": "etf", "current_value": "5000", "total_change": "500",
         "currency": "USD",
     }, follow_redirects=True)
     assert resp.status_code == 200

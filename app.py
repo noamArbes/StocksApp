@@ -175,24 +175,29 @@ def _holding_from_form(form, existing=None):
     if category not in ("stocks", "etf", "mmf"):
         return None, "Invalid category"
 
-    shares_raw = form.get("shares", "").strip()
-    if not shares_raw:
-        return None, "Shares is required"
-    try:
-        shares = float(shares_raw)
-    except ValueError:
-        return None, "Shares must be a number"
-
     if category == "etf":
-        pl_pct_raw = form.get("pl_pct", "").strip()
-        if not pl_pct_raw:
-            return None, "Total gain/loss % is required"
+        current_value_raw = form.get("current_value", "").strip()
+        if not current_value_raw:
+            return None, "Current value is required"
         try:
-            pl_pct = float(pl_pct_raw)
+            current_value = float(current_value_raw)
         except ValueError:
-            return None, "Total gain/loss % must be a number"
-        if pl_pct <= -100:
-            return None, "Gain/loss % cannot be -100% or less"
+            return None, "Current value must be a number"
+        if current_value <= 0:
+            return None, "Current value must be greater than zero"
+
+        total_change_raw = form.get("total_change", "").strip()
+        if not total_change_raw:
+            return None, "Total change is required"
+        try:
+            total_change = float(total_change_raw)
+        except ValueError:
+            return None, "Total change must be a number"
+
+        cost_basis = current_value - total_change
+        if cost_basis <= 0:
+            return None, "Total change cannot be equal to or greater than current value"
+
         try:
             if is_tase:
                 current_price = tase.get_price(tase_id, tase_type)
@@ -202,8 +207,16 @@ def _holding_from_form(form, existing=None):
                 raise ValueError("no price")
         except Exception:
             return None, "Could not fetch current price — please try again"
-        cost_basis = (current_price * shares) / (1 + pl_pct / 100)
+        shares = current_value / current_price
     else:
+        shares_raw = form.get("shares", "").strip()
+        if not shares_raw:
+            return None, "Shares is required"
+        try:
+            shares = float(shares_raw)
+        except ValueError:
+            return None, "Shares must be a number"
+
         cost_raw = form.get("cost_basis", "").strip()
         if not cost_raw:
             return None, "Cost basis is required"
