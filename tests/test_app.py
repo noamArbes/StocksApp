@@ -1030,6 +1030,35 @@ def test_holding_from_form_etf_pnl_missing(monkeypatch):
     assert "gain/loss" in error.lower() or "%" in error
 
 
+def test_holding_from_form_etf_pnl_non_numeric(monkeypatch):
+    import app as app_module
+    from werkzeug.datastructures import ImmutableMultiDict
+    monkeypatch.setattr(app_module.checker, "get_price_with_change", lambda t: (100.0, 99.0))
+    form = ImmutableMultiDict([
+        ("source", "yfinance"), ("ticker", "VOO"), ("name", "Vanguard"),
+        ("category", "etf"), ("shares", "10"), ("pl_pct", "abc"), ("currency", "USD"),
+    ])
+    holding, error = app_module._holding_from_form(form)
+    assert holding is None
+    assert "gain/loss" in error.lower() or "%" in error
+
+
+def test_holding_from_form_etf_tase_derives_cost_basis(monkeypatch):
+    import app as app_module
+    import tase as tase_module
+    from werkzeug.datastructures import ImmutableMultiDict
+    monkeypatch.setattr(tase_module, "get_price", lambda tase_id, tase_type: 50.0)
+    form = ImmutableMultiDict([
+        ("source", "tase"), ("ticker", "מגדל"), ("name", "Migdal Fund"),
+        ("tase_id", "1234567"), ("tase_type", "fund"),
+        ("category", "etf"), ("shares", "20"), ("pl_pct", "25"), ("currency", "ILS"),
+    ])
+    holding, error = app_module._holding_from_form(form)
+    assert error is None
+    # cost_basis = (50.0 * 20) / (1 + 25/100) = 1000 / 1.25 = 800.0
+    assert abs(holding["cost_basis"] - 800.0) < 0.01
+
+
 def test_holding_from_form_etf_pnl_minus_100(monkeypatch):
     import app as app_module
     from werkzeug.datastructures import ImmutableMultiDict
