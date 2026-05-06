@@ -63,7 +63,7 @@
         </label>
         {% else %}
         <label>Shares owned
-            <input type="number" step="any" min="0" name="shares"
+            <input type="number" step="0.01" min="0" name="shares"
                 value="{{ form.get('shares', '') }}"
                 placeholder="e.g. 23.5" required>
         </label>
