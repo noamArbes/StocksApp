@@ -183,13 +183,34 @@ def _holding_from_form(form, existing=None):
     except ValueError:
         return None, "Shares must be a number"
 
-    cost_raw = form.get("cost_basis", "").strip()
-    if not cost_raw:
-        return None, "Cost basis is required"
-    try:
-        cost_basis = float(cost_raw)
-    except ValueError:
-        return None, "Cost basis must be a number"
+    if category == "etf":
+        pl_pct_raw = form.get("pl_pct", "").strip()
+        if not pl_pct_raw:
+            return None, "Total gain/loss % is required and must be a number"
+        try:
+            pl_pct = float(pl_pct_raw)
+        except ValueError:
+            return None, "Total gain/loss % is required and must be a number"
+        if pl_pct == -100:
+            return None, "Gain/loss % cannot be -100%"
+        try:
+            if is_tase:
+                current_price = tase.get_price(tase_id, tase_type)
+            else:
+                current_price, _ = checker.get_price_with_change(ticker)
+            if current_price is None:
+                raise ValueError("no price")
+        except Exception:
+            return None, "Could not fetch current price — please try again"
+        cost_basis = (current_price * shares) / (1 + pl_pct / 100)
+    else:
+        cost_raw = form.get("cost_basis", "").strip()
+        if not cost_raw:
+            return None, "Cost basis is required"
+        try:
+            cost_basis = float(cost_raw)
+        except ValueError:
+            return None, "Cost basis must be a number"
 
     currency = "ILS" if is_tase else form.get("currency", "USD")
 
