@@ -1218,3 +1218,29 @@ def test_savings_inline_shares_update(savings_client):
     assert data["shares"] == 15.5
     holdings = json.loads(savings_file.read_text())
     assert holdings[0]["shares"] == 15.5
+
+
+def test_load_siemens_returns_none_when_file_missing():
+    import checker
+    assert checker.load_siemens("/nonexistent/path/siemens.json") is None
+
+
+def test_load_siemens_returns_dict_when_file_exists(tmp_path):
+    import checker
+    data = {"shares": 10.0, "total_value_ils": 5000, "gain_ils": 200, "gain_pct": 4.2,
+            "last_updated": "2026-05-10T10:00:00+00:00"}
+    f = tmp_path / "siemens.json"
+    f.write_text(json.dumps(data))
+    result = checker.load_siemens(str(f))
+    assert result["shares"] == 10.0
+    assert result["gain_pct"] == 4.2
+
+
+def test_save_siemens_writes_file(tmp_path):
+    import checker
+    data = {"shares": 24.83, "total_value_ils": 42500, "gain_ils": 3200, "gain_pct": 8.1,
+            "last_updated": "2026-05-10T10:00:00+00:00"}
+    path = str(tmp_path / "siemens.json")
+    checker.save_siemens(data, path)
+    saved = json.loads(open(path).read())
+    assert saved["shares"] == 24.83

@@ -109,6 +109,8 @@ SAVINGS_LOCAL_PATH = "savings.json"
 SAVINGS_VOLUME_PATH = "/data/savings.json"
 SNAPSHOTS_LOCAL_PATH = "savings_snapshots.json"
 SNAPSHOTS_VOLUME_PATH = "/data/savings_snapshots.json"
+SIEMENS_LOCAL_PATH = "siemens.json"
+SIEMENS_VOLUME_PATH = "/data/siemens.json"
 
 
 def get_alarms_path() -> str:
@@ -159,6 +161,28 @@ def get_snapshots_path() -> str:
     if os.path.isdir("/data"):
         return SNAPSHOTS_VOLUME_PATH
     return SNAPSHOTS_LOCAL_PATH
+
+
+def get_siemens_path() -> str:
+    """Returns the path to siemens.json — volume path on Railway, local path otherwise."""
+    if os.path.isdir("/data"):
+        return SIEMENS_VOLUME_PATH
+    return SIEMENS_LOCAL_PATH
+
+
+def load_siemens(path: str) -> dict | None:
+    if not os.path.exists(path):
+        return None
+    with open(path, "r") as f:
+        return json.load(f)
+
+
+def save_siemens(data: dict, path: str) -> None:
+    dir_name = os.path.dirname(path) or "."
+    with tempfile.NamedTemporaryFile("w", dir=dir_name, delete=False, suffix=".tmp") as f:
+        json.dump(data, f, indent=2)
+        tmp_path = f.name
+    os.replace(tmp_path, path)
 
 
 def load_trades(path: str) -> list:
