@@ -1,2 +1,33 @@
 {% extends "base.html" %}
-{% block content %}<p>placeholder</p>{% endblock %}
+{% block content %}
+<div class="form-card">
+    <h2>Siemens Matching Program</h2>
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    <form method="post">
+        <label>Shares *
+            <input type="number" step="any" name="shares"
+                value="{{ form.get('shares') or '' }}"
+                placeholder="e.g. 24.83" required>
+        </label>
+        <label>Total Value (₪) *
+            <input type="number" step="any" name="total_value_ils"
+                value="{{ form.get('total_value_ils') or '' }}"
+                placeholder="e.g. 42500" required>
+        </label>
+        <label>Gain (₪) *
+            <input type="number" step="any" name="gain_ils"
+                value="{{ form.get('gain_ils') or '' }}"
+                placeholder="e.g. 3200 (negative if loss)" required>
+        </label>
+        <label>Gain % *
+            <input type="number" step="any" name="gain_pct"
+                value="{{ form.get('gain_pct') or '' }}"
+                placeholder="e.g. 8.1 (negative if loss)" required>
+        </label>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save</button>
+            <a href="{{ url_for('savings') }}" class="btn">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

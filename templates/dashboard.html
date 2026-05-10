@@ -464,6 +464,14 @@ document.getElementById('alarm-search').addEventListener('input', function() {
                 </span>
             </div>
             {% endfor %}
+        {% if siemens %}
+        <div class="savings-breakdown-row">
+            <span>Siemens Program</span>
+            <span class="{% if siemens.gain_ils >= 0 %}value-positive{% else %}value-negative{% endif %}">
+                {{ "{:+,.0f}".format(siemens.gain_ils) }} ₪
+            </span>
+        </div>
+        {% endif %}
         </div>
     </div>
 
@@ -635,6 +643,51 @@ document.getElementById('alarm-search').addEventListener('input', function() {
     </div>
 </div>
 {% endfor %}
+
+{# ══ Siemens Matching Program ══ #}
+<div class="savings-category">
+    <div class="savings-category-header" style="cursor:default">
+        <span class="savings-cat-dot" style="background:#7b68ee"></span>
+        <span class="savings-cat-title">Siemens Matching Program</span>
+    </div>
+    {% if siemens %}
+    <div class="siemens-card">
+        <div class="siemens-stats">
+            <div>
+                <div class="siemens-stat-label">Shares</div>
+                <div class="siemens-stat-value">{{ "%.2f"|format(siemens.shares) }}</div>
+            </div>
+            <div>
+                <div class="siemens-stat-label">Value (₪)</div>
+                <div class="siemens-stat-value">₪{{ "{:,.0f}".format(siemens.total_value_ils) }}</div>
+            </div>
+            <div>
+                <div class="siemens-stat-label">Gain (₪)</div>
+                <div class="siemens-stat-value {% if siemens.gain_ils >= 0 %}value-positive{% else %}value-negative{% endif %}">
+                    {{ "{:+,.0f}".format(siemens.gain_ils) }} ₪
+                </div>
+            </div>
+            <div>
+                <div class="siemens-stat-label">Gain %</div>
+                <div class="siemens-stat-value {% if siemens.gain_pct >= 0 %}value-positive{% else %}value-negative{% endif %}">
+                    {{ "%+.1f"|format(siemens.gain_pct) }}%
+                </div>
+            </div>
+        </div>
+        <div class="siemens-footer">
+            <span class="savings-updated">Updated {{ siemens_updated_rel }}</span>
+            <div class="savings-actions">
+                <a href="{{ siemens_portal_url }}" target="_blank" rel="noopener" class="btn-xs">🔗 Open Portal</a>
+                <a href="{{ url_for('siemens_edit') }}" class="btn-xs">Edit</a>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="siemens-card siemens-empty">
+        No data yet. <a href="{{ url_for('siemens_edit') }}">Add details</a>
+    </div>
+    {% endif %}
+</div>
 
 <script>
 function toggleCategory(cat) {

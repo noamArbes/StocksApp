@@ -884,3 +884,48 @@ form label { position: relative; }
         grid-template-columns: 1fr;
     }
 }
+
+/* ── Siemens Matching Program ────────────────── */
+.siemens-card {
+    margin: 0.5rem 0 1rem;
+    background: #242018;
+    border: 1px solid #3a3028;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+}
+
+.siemens-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
+    text-align: center;
+}
+
+.siemens-stat-label {
+    color: #7a6a5a;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+}
+
+.siemens-stat-value {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #f5e6d3;
+}
+
+.siemens-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.75rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid #3a3028;
+}
+
+.siemens-empty {
+    color: #7a6a5a;
+    font-size: 0.9rem;
+    text-align: center;
+    padding: 1.5rem;
+}
