@@ -8,10 +8,19 @@
         <input type="hidden" name="ils_mode" id="ils-mode-input" value="{{ '1' if (form.get('buy_amount_ils') or form.get('sell_amount_ils')) else '0' }}">
 
         <label>Ticker / ETF number *
-            <input type="text" name="ticker"
-                value="{{ form.get('ticker') or '' }}"
-                placeholder="e.g. AAPL or 1159243"
-                {% if trade %}readonly{% endif %}>
+            <div style="position:relative">
+                <input type="text" name="ticker" id="ticker-input"
+                    value="{{ form.get('ticker') or '' }}"
+                    placeholder="e.g. AAPL or 1159243"
+                    autocomplete="off"
+                    {% if trade %}readonly{% endif %}>
+                <div class="autocomplete-dropdown" id="ticker-dropdown"></div>
+            </div>
+        </label>
+        <label>Name — optional, auto-filled by search
+            <input type="text" name="name" id="name-input"
+                value="{{ form.get('name') or '' }}"
+                placeholder="e.g. Vanguard S&P 500 ETF">
         </label>
 
         {% if not is_record_sale %}
@@ -148,5 +157,52 @@ function updateForm() {
 
 // Initialize: disable inputs in the inactive mode on page load
 disableInputs(document.getElementById(_mode === 'price' ? 'ils-mode-fields' : 'price-mode-fields'), true);
+
+// Ticker autocomplete
+(function() {
+    var tickerInput = document.getElementById('ticker-input');
+    var nameInput = document.getElementById('name-input');
+    var dropdown = document.getElementById('ticker-dropdown');
+    if (!tickerInput || tickerInput.readOnly) return;
+
+    var _timer;
+
+    function showResults(results) {
+        dropdown.innerHTML = '';
+        if (!results.length) { dropdown.style.display = 'none'; return; }
+        results.forEach(function(r) {
+            var div = document.createElement('div');
+            div.className = 'autocomplete-item';
+            div.textContent = (r.name || r.symbol) + (r.ticker || r.symbol ? ' (' + (r.ticker || r.symbol) + ')' : '');
+            div.addEventListener('click', function() {
+                tickerInput.value = r.id || r.symbol || r.ticker || '';
+                if (nameInput && !nameInput.value) nameInput.value = r.name || '';
+                dropdown.style.display = 'none';
+            });
+            dropdown.appendChild(div);
+        });
+        dropdown.style.display = 'block';
+    }
+
+    tickerInput.addEventListener('input', function() {
+        clearTimeout(_timer);
+        var q = this.value.trim();
+        if (q.length < 2) { dropdown.style.display = 'none'; return; }
+        var isNumeric = /^\d+$/.test(q);
+        var endpoint = isNumeric ? '/api/tase-search?q=' : '/ticker-search?q=';
+        _timer = setTimeout(function() {
+            fetch(endpoint + encodeURIComponent(q))
+                .then(function(r) { return r.json(); })
+                .then(showResults)
+                .catch(function() { dropdown.style.display = 'none'; });
+        }, 200);
+    });
+
+    document.addEventListener('click', function(e) {
+        if (e.target !== tickerInput && !dropdown.contains(e.target)) {
+            dropdown.style.display = 'none';
+        }
+    });
+})();
 </script>
 {% endblock %}

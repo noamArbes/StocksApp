@@ -88,7 +88,11 @@
     <tr>
         {% set ttype = trade.get('type', 'sell') %}
         <td><span class="trade-type-badge trade-type-{{ ttype }}">{{ ttype|title }}</span></td>
-        <td class="trade-ticker">{{ trade.ticker }}</td>
+        <td class="trade-ticker" style="text-align:left">
+            {% if trade.get('name') %}<strong>{{ trade.name }}</strong><br>
+            <span style="font-size:0.75rem;color:#7a6a5a">{{ trade.ticker }}</span>
+            {% else %}{{ trade.ticker }}{% endif %}
+        </td>
         <td>{{ trade.shares if trade.shares else '—' }}</td>
         <td>{% if trade.get('buy_amount_ils') is not none and trade.get('buy_amount_ils') %}₪{{ "{:,.0f}".format(trade.buy_amount_ils) }}{% elif trade.buy_price is not none %}{{ curr }}{{ "%.2f"|format(trade.buy_price) }}{% else %}—{% endif %}</td>
         <td>{{ trade.buy_date or '—' }}</td>

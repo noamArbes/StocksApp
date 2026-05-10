@@ -1088,6 +1088,7 @@ def _trade_from_form(form, existing=None):
     if not ticker:
         return None, "Ticker is required"
 
+    name = form.get("name", "").strip()
     source = form.get("source", "yfinance")
     trade_type = form.get("type", "sell")
     if trade_type not in ("buy", "sell"):
@@ -1151,6 +1152,7 @@ def _trade_from_form(form, existing=None):
         "id": existing["id"] if existing else str(uuid.uuid4())[:8],
         "type": trade_type,
         "ticker": ticker,
+        "name": name,
         "source": source,
         "shares": shares,
         "buy_price": buy_price,
