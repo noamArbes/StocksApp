@@ -602,10 +602,10 @@ document.getElementById('alarm-search').addEventListener('input', function() {
             {% set hd = holding_data[h.id] %}
             {% set curr = '₪' if h.currency == 'ILS' else '$' %}
             <tr>
-                <td>
+                <td style="text-align:left">
                     {% if cat == 'etf' %}
-                    <strong>{{ h.name }}</strong><br>
-                    <span class="savings-holding-name">{{ h.ticker }}</span>
+                    <strong>{{ h.name or h.ticker }}</strong>
+                    {% if h.get('tase_id') %}<br><span class="savings-holding-name">{{ h.tase_id }}</span>{% endif %}
                     {% else %}
                     <strong>{{ h.ticker }}</strong><br>
                     <span class="savings-holding-name">{{ h.name }}</span>

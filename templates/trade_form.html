@@ -115,11 +115,19 @@
 <script>
 var _mode = document.getElementById('ils-mode-input').value === '1' ? 'ils' : 'price';
 
+function disableInputs(container, disabled) {
+    container.querySelectorAll('input, select').forEach(function(el) {
+        el.disabled = disabled;
+    });
+}
+
 function setMode(mode) {
     _mode = mode;
     document.getElementById('ils-mode-input').value = mode === 'ils' ? '1' : '0';
     document.getElementById('price-mode-fields').style.display = mode === 'price' ? '' : 'none';
     document.getElementById('ils-mode-fields').style.display = mode === 'ils' ? '' : 'none';
+    disableInputs(document.getElementById('price-mode-fields'), mode !== 'price');
+    disableInputs(document.getElementById('ils-mode-fields'), mode !== 'ils');
     document.getElementById('btn-price-mode').classList.toggle('active', mode === 'price');
     document.getElementById('btn-ils-mode').classList.toggle('active', mode === 'ils');
     updateForm();
@@ -129,15 +137,16 @@ function updateForm() {
     var typeEl = document.getElementById('trade-type');
     var tradeType = typeEl ? typeEl.value : 'sell';
 
-    // Price mode: show/hide sell fields
     var sellPriceFields = document.getElementById('sell-price-fields');
     if (sellPriceFields) sellPriceFields.style.display = tradeType === 'sell' ? '' : 'none';
 
-    // ILS mode: show buy or sell fields based on type
     var ilsBuy = document.getElementById('ils-buy-fields');
     var ilsSell = document.getElementById('ils-sell-fields');
     if (ilsBuy) ilsBuy.style.display = (_mode === 'ils' && tradeType === 'buy') ? '' : 'none';
     if (ilsSell) ilsSell.style.display = (_mode === 'ils' && tradeType === 'sell') ? '' : 'none';
 }
+
+// Initialize: disable inputs in the inactive mode on page load
+disableInputs(document.getElementById(_mode === 'price' ? 'ils-mode-fields' : 'price-mode-fields'), true);
 </script>
 {% endblock %}
