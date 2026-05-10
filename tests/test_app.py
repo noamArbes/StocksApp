@@ -1244,3 +1244,54 @@ def test_save_siemens_writes_file(tmp_path):
     checker.save_siemens(data, path)
     saved = json.loads(open(path).read())
     assert saved["shares"] == 24.83
+
+
+def test_siemens_edit_get_empty_state(tmp_path, monkeypatch):
+    """GET /siemens/edit works when no siemens.json exists yet."""
+    monkeypatch.setattr(app_module, "_SIEMENS_PATH", str(tmp_path / "siemens.json"))
+    flask_app.config["TESTING"] = True
+    with flask_app.test_client() as c:
+        login(c)
+        resp = c.get("/siemens/edit")
+    assert resp.status_code == 200
+
+
+def test_siemens_edit_post_saves_and_redirects(tmp_path, monkeypatch):
+    siemens_file = tmp_path / "siemens.json"
+    monkeypatch.setattr(app_module, "_SIEMENS_PATH", str(siemens_file))
+    flask_app.config["TESTING"] = True
+    with flask_app.test_client() as c:
+        login(c)
+        resp = c.post("/siemens/edit", data={
+            "shares": "24.83",
+            "total_value_ils": "42500",
+            "gain_ils": "3200",
+            "gain_pct": "8.1",
+        })
+    assert resp.status_code == 302
+    saved = json.loads(siemens_file.read_text())
+    assert saved["shares"] == 24.83
+    assert saved["gain_pct"] == 8.1
+    assert "last_updated" in saved
+
+
+def test_savings_includes_siemens_in_total(savings_client, tmp_path, monkeypatch):
+    c, savings_file = savings_client
+    siemens_file = tmp_path / "siemens.json"
+    siemens_file.write_text(json.dumps({
+        "shares": 10.0, "total_value_ils": 5000, "gain_ils": 500, "gain_pct": 11.1,
+        "last_updated": "2026-05-10T10:00:00+00:00"
+    }))
+    monkeypatch.setattr(app_module, "_SIEMENS_PATH", str(siemens_file))
+    login(c)
+    resp = c.get("/savings")
+    assert resp.status_code == 200
+    assert b"5,000" in resp.data or b"5000" in resp.data
+
+
+def test_savings_works_without_siemens_file(savings_client, tmp_path, monkeypatch):
+    c, _ = savings_client
+    monkeypatch.setattr(app_module, "_SIEMENS_PATH", str(tmp_path / "no_siemens.json"))
+    login(c)
+    resp = c.get("/savings")
+    assert resp.status_code == 200

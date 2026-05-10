@@ -32,6 +32,8 @@ _ALARMS_PATH = checker.get_alarms_path()  # sync local→volume once at startup
 _TRADES_PATH = checker.get_trades_path()
 _SAVINGS_PATH = checker.get_savings_path()
 _SNAPSHOTS_PATH = checker.get_snapshots_path()
+_SIEMENS_PATH = checker.get_siemens_path()
+SIEMENS_PORTAL_URL = "https://samlparticipant.equateplus.com/EquatePlusParticipant2/start"
 _tase_cache = tase.load_securities_cache()
 
 
@@ -114,6 +116,16 @@ def modify_savings(fn):
 def read_snapshots():
     with _lock:
         return checker.load_snapshots(_snapshots_path())
+
+
+def read_siemens():
+    with _lock:
+        return checker.load_siemens(_SIEMENS_PATH)
+
+
+def write_siemens(data):
+    with _lock:
+        checker.save_siemens(data, _SIEMENS_PATH)
 
 
 def _relative_time(iso_str: str) -> str:
@@ -590,6 +602,33 @@ def alarm_record_sale(alarm_id):
                            is_record_sale=True, trade=alarm)
 
 
+# --- Siemens ---
+
+@app.route("/siemens/edit", methods=["GET", "POST"])
+@login_required
+def siemens_edit():
+    if request.method == "POST":
+        try:
+            shares = float(request.form.get("shares", "").strip())
+            total_value_ils = float(request.form.get("total_value_ils", "").strip())
+            gain_ils = float(request.form.get("gain_ils", "").strip())
+            gain_pct = float(request.form.get("gain_pct", "").strip())
+        except ValueError:
+            return render_template("siemens_form.html",
+                                   error="All fields must be numbers",
+                                   form=request.form)
+        write_siemens({
+            "shares": shares,
+            "total_value_ils": total_value_ils,
+            "gain_ils": gain_ils,
+            "gain_pct": gain_pct,
+            "last_updated": datetime.now(timezone.utc).isoformat(),
+        })
+        return redirect(url_for("savings"))
+    siemens = read_siemens() or {}
+    return render_template("siemens_form.html", form=siemens)
+
+
 # --- Savings ---
 
 @app.route("/savings")
@@ -657,6 +696,15 @@ def savings():
     total_pl_ils = sum(d["pl_ils"] for d in cat_data.values())
     total_today_ils = sum(d["today_ils"] for d in cat_data.values())
     total_cost_ils = sum(d["cost_ils"] for d in cat_data.values())
+
+    siemens = read_siemens()
+    if siemens:
+        sie_value = siemens.get("total_value_ils") or 0
+        sie_gain = siemens.get("gain_ils") or 0
+        total_value_ils += sie_value
+        total_pl_ils += sie_gain
+        total_cost_ils += sie_value - sie_gain
+
     total_pl_pct = (total_pl_ils / total_cost_ils * 100) if total_cost_ils else None
     prev_total = total_value_ils - total_today_ils
     total_today_pct = (total_today_ils / prev_total * 100) if prev_total else None
@@ -699,6 +747,9 @@ def savings():
         usd_to_ils=usd_to_ils,
         categories=("etf", "stocks", "mmf"),
         category_labels={"etf": "ETFs", "stocks": "Stocks", "mmf": "Money Market Funds (MMF)"},
+        siemens=siemens,
+        siemens_updated_rel=_relative_time(siemens.get("last_updated")) if siemens else None,
+        siemens_portal_url=SIEMENS_PORTAL_URL,
     )
 
 
