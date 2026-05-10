@@ -581,6 +581,7 @@ document.getElementById('alarm-search').addEventListener('input', function() {
     </div>
     <div id="cat-body-{{ cat }}">
         {% if cat_holdings %}
+        <div class="history-table-wrap">
         <table class="savings-holdings-table">
             <thead>
                 <tr>
@@ -651,6 +652,7 @@ document.getElementById('alarm-search').addEventListener('input', function() {
             {% endfor %}
             </tbody>
         </table>
+        </div>
         {% endif %}
         <div class="savings-add-row">
             <a href="{{ url_for('savings_new', category=cat) }}" class="btn-xs">+ Add {{ category_labels[cat][:-1] if cat != 'mmf' else 'MMF' }}</a>
