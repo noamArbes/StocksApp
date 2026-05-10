@@ -646,7 +646,7 @@ document.getElementById('alarm-search').addEventListener('input', function() {
 
 {# ══ Siemens Matching Program ══ #}
 <div class="savings-category">
-    <div class="savings-category-header" style="cursor:default">
+    <div class="savings-category-header siemens-category-header">
         <span class="savings-cat-dot" style="background:#7b68ee"></span>
         <span class="savings-cat-title">Siemens Matching Program</span>
     </div>
@@ -659,7 +659,7 @@ document.getElementById('alarm-search').addEventListener('input', function() {
             </div>
             <div>
                 <div class="siemens-stat-label">Value (₪)</div>
-                <div class="siemens-stat-value">₪{{ "{:,.0f}".format(siemens.total_value_ils) }}</div>
+                <div class="siemens-stat-value">{{ "{:,.0f}".format(siemens.total_value_ils) }} ₪</div>
             </div>
             <div>
                 <div class="siemens-stat-label">Gain (₪)</div>
@@ -675,7 +675,7 @@ document.getElementById('alarm-search').addEventListener('input', function() {
             </div>
         </div>
         <div class="siemens-footer">
-            <span class="savings-updated">Updated {{ siemens_updated_rel }}</span>
+            <span class="savings-updated">Updated {{ siemens_updated_rel or '—' }}</span>
             <div class="savings-actions">
                 <a href="{{ siemens_portal_url }}" target="_blank" rel="noopener" class="btn-xs">🔗 Open Portal</a>
                 <a href="{{ url_for('siemens_edit') }}" class="btn-xs">Edit</a>

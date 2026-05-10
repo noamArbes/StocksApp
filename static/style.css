@@ -883,6 +883,7 @@ form label { position: relative; }
     .savings-summary {
         grid-template-columns: 1fr;
     }
+    .siemens-stats { grid-template-columns: 1fr 1fr; }
 }
 
 /* ── Siemens Matching Program ────────────────── */
@@ -929,3 +930,5 @@ form label { position: relative; }
     text-align: center;
     padding: 1.5rem;
 }
+
+.savings-category-header.siemens-category-header { cursor: default; }
