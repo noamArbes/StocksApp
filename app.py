@@ -33,7 +33,7 @@ _TRADES_PATH = checker.get_trades_path()
 _SAVINGS_PATH = checker.get_savings_path()
 _SNAPSHOTS_PATH = checker.get_snapshots_path()
 _SIEMENS_PATH = checker.get_siemens_path()
-SIEMENS_PORTAL_URL = "https://samlparticipant.equateplus.com/EquatePlusParticipant2/start"
+_SIEMENS_PORTAL_URL = "https://samlparticipant.equateplus.com/EquatePlusParticipant2/start"
 _tase_cache = tase.load_securities_cache()
 
 
@@ -749,7 +749,7 @@ def savings():
         category_labels={"etf": "ETFs", "stocks": "Stocks", "mmf": "Money Market Funds (MMF)"},
         siemens=siemens,
         siemens_updated_rel=_relative_time(siemens.get("last_updated")) if siemens else None,
-        siemens_portal_url=SIEMENS_PORTAL_URL,
+        siemens_portal_url=_SIEMENS_PORTAL_URL,
     )
 
 

@@ -1286,7 +1286,10 @@ def test_savings_includes_siemens_in_total(savings_client, tmp_path, monkeypatch
     login(c)
     resp = c.get("/savings")
     assert resp.status_code == 200
-    assert b"5,000" in resp.data or b"5000" in resp.data
+    # Assert that the combined total (Siemens 5000 + 0 from empty holdings = 5000)
+    # appears in the summary card as the formatted total portfolio value.
+    # This only renders as ₪5,000 if Siemens was actually added to total_value_ils.
+    assert "₪5,000".encode("utf-8") in resp.data
 
 
 def test_savings_works_without_siemens_file(savings_client, tmp_path, monkeypatch):
