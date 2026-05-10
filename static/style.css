@@ -719,7 +719,7 @@ form label { position: relative; }
     white-space: nowrap;
 }
 .savings-holdings-table th:first-child {
-    width: 22%;
+    min-width: 130px;
 }
 
 .savings-holdings-table td {
@@ -732,9 +732,7 @@ form label { position: relative; }
 }
 .savings-holdings-table td:first-child {
     white-space: normal;
-    max-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    min-width: 130px;
 }
 
 .savings-holdings-table tr:last-child td {
