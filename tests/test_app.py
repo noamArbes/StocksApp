@@ -765,6 +765,45 @@ def test_trade_from_form_preserves_id_on_edit():
     assert trade["created_at"] == "2026-01-01T00:00:00+00:00"
 
 
+def test_trade_from_form_buy_type_skips_sell_validation():
+    from app import _trade_from_form
+    from werkzeug.datastructures import ImmutableMultiDict
+    form = ImmutableMultiDict([
+        ("type", "buy"), ("ticker", "MSFT"), ("source", "yfinance"),
+        ("shares", "5"), ("buy_price", "390.00"), ("buy_date", "2025-01-10"),
+    ])
+    trade, error = _trade_from_form(form)
+    assert error is None
+    assert trade["type"] == "buy"
+    assert trade["sell_price"] is None
+    assert trade["sell_date"] is None
+
+
+def test_trade_from_form_sell_type_still_requires_sell_price():
+    from app import _trade_from_form
+    from werkzeug.datastructures import ImmutableMultiDict
+    form = ImmutableMultiDict([
+        ("type", "sell"), ("ticker", "AAPL"), ("source", "yfinance"),
+        ("shares", "10"), ("buy_price", "200.00"), ("buy_date", "2025-01-01"),
+    ])
+    trade, error = _trade_from_form(form)
+    assert error is not None
+    assert "sell price" in error.lower()
+
+
+def test_trade_from_form_defaults_to_sell_when_type_missing():
+    from app import _trade_from_form
+    from werkzeug.datastructures import ImmutableMultiDict
+    form = ImmutableMultiDict([
+        ("ticker", "AAPL"), ("source", "yfinance"),
+        ("shares", "10"), ("buy_price", "200.00"), ("buy_date", "2025-01-01"),
+        ("sell_price", "240.00"), ("sell_date", "2025-01-20"),
+    ])
+    trade, error = _trade_from_form(form)
+    assert error is None
+    assert trade["type"] == "sell"
+
+
 def test_create_trade_via_post(client, tmp_path, monkeypatch):
     import app as app_module
     trades_file = tmp_path / "trades.json"

@@ -1033,6 +1033,9 @@ def _trade_from_form(form, existing=None):
         return None, "Ticker is required"
 
     source = form.get("source", "yfinance")
+    trade_type = form.get("type", "sell")
+    if trade_type not in ("buy", "sell"):
+        trade_type = "sell"
 
     shares_raw = form.get("shares", "").strip()
     if shares_raw:
@@ -1052,25 +1055,26 @@ def _trade_from_form(form, existing=None):
         return None, "Prices must be numbers"
     if buy_price is None:
         return None, "Buy price is required"
-    if sell_price is None:
+    if trade_type == "sell" and sell_price is None:
         return None, "Sell price is required"
 
     buy_date = form.get("buy_date", "").strip()
     sell_date = form.get("sell_date", "").strip()
     if not buy_date:
         return None, "Buy date is required"
-    if not sell_date:
+    if trade_type == "sell" and not sell_date:
         return None, "Sell date is required"
 
     return {
         "id": existing["id"] if existing else str(uuid.uuid4())[:8],
+        "type": trade_type,
         "ticker": ticker,
         "source": source,
         "shares": shares,
         "buy_price": buy_price,
         "buy_date": buy_date,
         "sell_price": sell_price,
-        "sell_date": sell_date,
+        "sell_date": sell_date if trade_type == "sell" else None,
         "created_at": existing["created_at"] if existing else datetime.now(timezone.utc).isoformat(),
     }, None
 
