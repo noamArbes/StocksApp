@@ -501,7 +501,7 @@ document.getElementById('alarm-search').addEventListener('input', function() {
     </div>
 
     {# Pie chart #}
-    {% set pie_colors = {'etf': '#6b4f2a', 'stocks': '#c8a96e', 'mmf': '#81c784'} %}
+    {% set pie_colors = {'etf': '#6b4f2a', 'stocks': '#c8a96e', 'mmf': '#81c784', 'siemens': '#7b68ee'} %}
     <div class="savings-stat-card savings-pie-card">
         <div class="savings-stat-label">Allocation</div>
         <svg viewBox="0 0 120 120" width="130" height="130">
@@ -514,6 +514,15 @@ document.getElementById('alarm-search').addEventListener('input', function() {
                 stroke-dashoffset="{{ pie[cat].offset }}"
                 transform="rotate(-90 60 60)"/>
             {% endfor %}
+            {% if siemens and pie.siemens %}
+            <circle cx="60" cy="60" r="40"
+                fill="none"
+                stroke="{{ pie_colors.siemens }}"
+                stroke-width="24"
+                stroke-dasharray="{{ pie.siemens.dash }} {{ pie.siemens.gap }}"
+                stroke-dashoffset="{{ pie.siemens.offset }}"
+                transform="rotate(-90 60 60)"/>
+            {% endif %}
             <circle cx="60" cy="60" r="28" fill="white"/>
             <text x="60" y="56" text-anchor="middle" font-size="9" fill="#7a6a5a">Total</text>
             <text x="60" y="68" text-anchor="middle" font-size="10" fill="#2d2a24" font-weight="bold">
@@ -527,6 +536,12 @@ document.getElementById('alarm-search').addEventListener('input', function() {
                 <span>{{ category_labels[cat] }} — {{ "%.1f"|format(cat_data[cat].pct_of_portfolio) }}%</span>
             </div>
             {% endfor %}
+            {% if siemens and pie.siemens %}
+            <div class="savings-legend-item">
+                <span class="savings-legend-dot" style="background:{{ pie_colors.siemens }}"></span>
+                <span>Siemens — {{ "%.1f"|format(pie.siemens.dash / 251.33 * 100) }}%</span>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>

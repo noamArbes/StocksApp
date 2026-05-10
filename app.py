@@ -728,6 +728,10 @@ def savings():
         gap = round(circ - dash, 2)
         pie[cat] = {"dash": dash, "gap": gap, "offset": round(-offset, 2)}
         offset += dash
+    if siemens and total_value_ils:
+        sie_pct = (siemens.get("total_value_ils") or 0) / total_value_ils * 100
+        dash = round(sie_pct / 100 * circ, 2)
+        pie["siemens"] = {"dash": dash, "gap": round(circ - dash, 2), "offset": round(-offset, 2)}
 
     snapshots = read_snapshots()[-30:]
 
