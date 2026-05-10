@@ -12,7 +12,7 @@
     <a href="{{ url_for('dashboard') }}"
        class="tab {% if tab not in ('history', 'savings') %}tab-active{% endif %}">Alarms</a>
     <a href="{{ url_for('dashboard', tab='history') }}"
-       class="tab {% if tab == 'history' %}tab-active{% endif %}">Sell History</a>
+       class="tab {% if tab == 'history' %}tab-active{% endif %}">Trade History</a>
     <a href="{{ url_for('savings') }}"
        class="tab {% if tab == 'savings' %}tab-active{% endif %}">Savings</a>
     {% if tab == 'history' %}
@@ -22,7 +22,7 @@
 
 {% if tab == 'history' %}
 {# ══════════════════════════════════════════════════
-   SELL HISTORY TAB
+   TRADE HISTORY TAB
 ══════════════════════════════════════════════════ #}
 
 {# Summary card #}
@@ -68,7 +68,8 @@
 <table class="history-table">
     <thead>
         <tr>
-            <th>Stock</th>
+            <th>Type</th>
+            <th style="text-align:left">Ticker</th>
             <th>Shares</th>
             <th>Buy Price</th>
             <th>Buy Date</th>
@@ -85,12 +86,14 @@
     {% set pct = trade_pcts.get(trade.id) %}
     {% set pl = trade_pls.get(trade.id) %}
     <tr>
+        {% set ttype = trade.get('type', 'sell') %}
+        <td><span class="trade-type-badge trade-type-{{ ttype }}">{{ ttype|title }}</span></td>
         <td class="trade-ticker">{{ trade.ticker }}</td>
         <td>{{ trade.shares if trade.shares else '—' }}</td>
         <td>{{ curr }}{{ "%.2f"|format(trade.buy_price) }}</td>
         <td>{{ trade.buy_date }}</td>
-        <td>{{ curr }}{{ "%.2f"|format(trade.sell_price) }}</td>
-        <td>{{ trade.sell_date }}</td>
+        <td>{% if trade.sell_price is not none %}{{ curr }}{{ "%.2f"|format(trade.sell_price) }}{% else %}—{% endif %}</td>
+        <td>{{ trade.sell_date or '—' }}</td>
         {% if pct is not none %}
         <td class="{% if pct >= 0 %}value-positive{% else %}value-negative{% endif %}">
             {{ "%+.1f"|format(pct) }}%

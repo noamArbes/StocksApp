@@ -999,7 +999,7 @@ def test_dashboard_tab_bar_rendered(client, tmp_path, monkeypatch):
     resp = client.get("/dashboard?tab=history")
     assert resp.status_code == 200
     body = resp.data.decode()
-    assert "Sell History" in body
+    assert "Trade History" in body
     assert "Alarms" in body
 
 

@@ -307,10 +307,11 @@ def dashboard():
     # --- History tab ---
     if tab == "history":
         trades = read_trades()
+        sell_trades = [t for t in trades if t.get("type", "sell") == "sell"]
         trade_pcts = {}
         trade_pls = {}
         pl_values = []
-        for t in trades:
+        for t in sell_trades:
             tid = t.get("id")
             if not tid:
                 continue
@@ -327,9 +328,9 @@ def dashboard():
         pct_list = list(trade_pcts.values())
         avg_pct = sum(pct_list) / len(pct_list) if pct_list else None
         best = max(trade_pcts, key=trade_pcts.get, default=None)
-        best_trade = next((t for t in trades if t.get("id") == best), None) if best else None
+        best_trade = next((t for t in sell_trades if t.get("id") == best), None) if best else None
         summary = {
-            "count": len(trades),
+            "count": len(sell_trades),
             "total_pl": sum(pl_values) if pl_values else None,
             "avg_pct": avg_pct,
             "best_ticker": best_trade["ticker"] if best_trade else None,
