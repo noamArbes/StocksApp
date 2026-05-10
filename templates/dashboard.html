@@ -585,10 +585,10 @@ document.getElementById('alarm-search').addEventListener('input', function() {
         <table class="savings-holdings-table">
             <thead>
                 <tr>
-                    <th style="text-align:left">Name / Ticker</th>
-                    <th>Shares</th>
+                    <th style="text-align:left">Name</th>
+                    {% if cat != 'etf' %}<th>Shares</th>{% endif %}
                     <th>Cost Basis</th>
-                    <th>Price</th>
+                    {% if cat != 'etf' %}<th>Price</th>{% endif %}
                     <th>Value</th>
                     <th>P&amp;L</th>
                     <th>Today</th>
@@ -603,9 +603,15 @@ document.getElementById('alarm-search').addEventListener('input', function() {
             {% set curr = '₪' if h.currency == 'ILS' else '$' %}
             <tr>
                 <td>
+                    {% if cat == 'etf' %}
+                    <strong>{{ h.name }}</strong><br>
+                    <span class="savings-holding-name">{{ h.ticker }}</span>
+                    {% else %}
                     <strong>{{ h.ticker }}</strong><br>
                     <span class="savings-holding-name">{{ h.name }}</span>
+                    {% endif %}
                 </td>
+                {% if cat != 'etf' %}
                 <td>
                     <span class="savings-inline-edit" data-hid="{{ h.id }}"
                           onclick="startSharesEdit(this, {{ h.shares }})">
@@ -619,8 +625,9 @@ document.getElementById('alarm-search').addEventListener('input', function() {
                         <button type="button" onclick="cancelSharesEdit('{{ h.id }}')">✕</button>
                     </form>
                 </td>
+                {% endif %}
                 <td>{{ curr }}{{ "{:,.2f}".format(h.cost_basis) }}</td>
-                <td>{% if hd.price is not none %}{{ curr }}{{ "{:,.2f}".format(hd.price) }}{% else %}—{% endif %}</td>
+                {% if cat != 'etf' %}<td>{% if hd.price is not none %}{{ curr }}{{ "{:,.2f}".format(hd.price) }}{% else %}—{% endif %}</td>{% endif %}
                 <td>{% if hd.current_value is not none %}{{ curr }}{{ "{:,.2f}".format(hd.current_value) }}{% else %}—{% endif %}</td>
                 <td class="{% if hd.pl_ils is not none and hd.pl_ils >= 0 %}value-positive{% elif hd.pl_ils is not none %}value-negative{% endif %}">
                     {% if hd.pl_ils is not none %}
