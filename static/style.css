@@ -482,6 +482,29 @@ form label { position: relative; }
 .history-table-wrap {
     overflow-x: auto;
 }
+.trade-mode-toggle {
+    display: flex;
+    gap: 0;
+    margin-bottom: 1rem;
+    border: 1px solid #3a2e28;
+    border-radius: 6px;
+    overflow: hidden;
+}
+.trade-mode-btn {
+    flex: 1;
+    padding: 0.45rem 0.75rem;
+    background: transparent;
+    border: none;
+    color: #7a6a5a;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background 0.15s, color 0.15s;
+}
+.trade-mode-btn.active {
+    background: #c8a96e;
+    color: #1e1a18;
+    font-weight: 600;
+}
 .history-table {
     width: 100%;
     border-collapse: collapse;

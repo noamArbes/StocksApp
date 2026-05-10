@@ -5,17 +5,18 @@
     {% if error %}<p class="error">{{ error }}</p>{% endif %}
     <form method="post">
         <input type="hidden" name="source" value="{{ form.get('source') or 'yfinance' }}">
+        <input type="hidden" name="ils_mode" id="ils-mode-input" value="{{ '1' if (form.get('buy_amount_ils') or form.get('sell_amount_ils')) else '0' }}">
 
-        <label>Ticker / Stock name *
+        <label>Ticker / ETF number *
             <input type="text" name="ticker"
                 value="{{ form.get('ticker') or '' }}"
-                placeholder="e.g. AAPL"
+                placeholder="e.g. AAPL or 1159243"
                 {% if trade %}readonly{% endif %}>
         </label>
 
         {% if not is_record_sale %}
         <label>Trade Type *
-            <select name="type" id="trade-type" onchange="updateTradeType()">
+            <select name="type" id="trade-type" onchange="updateForm()">
                 <option value="sell" {% if form.get('type', 'sell') == 'sell' %}selected{% endif %}>Sell</option>
                 <option value="buy" {% if form.get('type') == 'buy' %}selected{% endif %}>Buy</option>
             </select>
@@ -24,35 +25,77 @@
         <input type="hidden" name="type" value="sell">
         {% endif %}
 
-        <label>Number of shares — optional
-            <input type="number" step="any" min="0" name="shares"
-                value="{{ form.get('shares') or '' }}"
-                placeholder="e.g. 20">
-        </label>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
-            <label>Buy Price *
-                <input type="number" step="0.01" name="buy_price"
-                    value="{{ form.get('buy_price') or '' }}"
-                    placeholder="e.g. 42.10">
-            </label>
-            <label>Buy Date *
-                <input type="date" name="buy_date"
-                    value="{{ form.get('buy_date') or '' }}">
-            </label>
+        {# Mode toggle #}
+        {% set ils_default = form.get('buy_amount_ils') or form.get('sell_amount_ils') %}
+        <div class="trade-mode-toggle">
+            <button type="button" id="btn-price-mode"
+                class="trade-mode-btn {% if not ils_default %}active{% endif %}"
+                onclick="setMode('price')">Per-share Price</button>
+            <button type="button" id="btn-ils-mode"
+                class="trade-mode-btn {% if ils_default %}active{% endif %}"
+                onclick="setMode('ils')">Total ₪ Amount</button>
         </div>
 
-        <div id="sell-fields" {% if form.get('type') == 'buy' %}style="display:none"{% endif %}>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:0.75rem">
-                <label>Sell Price *
-                    <input type="number" step="0.01" name="sell_price"
-                        value="{{ form.get('sell_price') or '' }}"
-                        placeholder="e.g. 67.80">
+        {# Price mode fields #}
+        <div id="price-mode-fields" {% if ils_default %}style="display:none"{% endif %}>
+            <label>Number of shares — optional
+                <input type="number" step="any" min="0" name="shares"
+                    value="{{ form.get('shares') or '' }}"
+                    placeholder="e.g. 20">
+            </label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+                <label>Buy Price *
+                    <input type="number" step="0.01" name="buy_price"
+                        value="{{ form.get('buy_price') or '' }}"
+                        placeholder="e.g. 42.10">
                 </label>
-                <label>Sell Date *
-                    <input type="date" name="sell_date"
-                        value="{{ form.get('sell_date') or '' }}">
+                <label>Buy Date *
+                    <input type="date" name="buy_date" id="buy-date-price"
+                        value="{{ form.get('buy_date') or '' }}">
                 </label>
+            </div>
+            <div id="sell-price-fields" {% if form.get('type') == 'buy' %}style="display:none"{% endif %}>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:0.75rem">
+                    <label>Sell Price *
+                        <input type="number" step="0.01" name="sell_price"
+                            value="{{ form.get('sell_price') or '' }}"
+                            placeholder="e.g. 67.80">
+                    </label>
+                    <label>Sell Date *
+                        <input type="date" name="sell_date" id="sell-date-price"
+                            value="{{ form.get('sell_date') or '' }}">
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        {# ILS amount mode fields #}
+        <div id="ils-mode-fields" {% if not ils_default %}style="display:none"{% endif %}>
+            <div id="ils-buy-fields" {% if form.get('type', 'sell') == 'sell' and ils_default %}style="display:none"{% endif %}>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+                    <label>Buy Amount (₪) *
+                        <input type="number" step="any" name="buy_amount_ils"
+                            value="{{ form.get('buy_amount_ils') or '' }}"
+                            placeholder="e.g. 5000">
+                    </label>
+                    <label>Buy Date *
+                        <input type="date" name="buy_date" id="buy-date-ils"
+                            value="{{ form.get('buy_date') or '' }}">
+                    </label>
+                </div>
+            </div>
+            <div id="ils-sell-fields" {% if form.get('type', 'sell') == 'buy' or not ils_default %}style="display:none"{% endif %}>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+                    <label>Sell Amount (₪) *
+                        <input type="number" step="any" name="sell_amount_ils"
+                            value="{{ form.get('sell_amount_ils') or '' }}"
+                            placeholder="e.g. 5500">
+                    </label>
+                    <label>Sell Date *
+                        <input type="date" name="sell_date" id="sell-date-ils"
+                            value="{{ form.get('sell_date') or '' }}">
+                    </label>
+                </div>
             </div>
         </div>
 
@@ -70,9 +113,31 @@
     </form>
 </div>
 <script>
-function updateTradeType() {
-    var type = document.getElementById('trade-type').value;
-    document.getElementById('sell-fields').style.display = type === 'sell' ? '' : 'none';
+var _mode = document.getElementById('ils-mode-input').value === '1' ? 'ils' : 'price';
+
+function setMode(mode) {
+    _mode = mode;
+    document.getElementById('ils-mode-input').value = mode === 'ils' ? '1' : '0';
+    document.getElementById('price-mode-fields').style.display = mode === 'price' ? '' : 'none';
+    document.getElementById('ils-mode-fields').style.display = mode === 'ils' ? '' : 'none';
+    document.getElementById('btn-price-mode').classList.toggle('active', mode === 'price');
+    document.getElementById('btn-ils-mode').classList.toggle('active', mode === 'ils');
+    updateForm();
+}
+
+function updateForm() {
+    var typeEl = document.getElementById('trade-type');
+    var tradeType = typeEl ? typeEl.value : 'sell';
+
+    // Price mode: show/hide sell fields
+    var sellPriceFields = document.getElementById('sell-price-fields');
+    if (sellPriceFields) sellPriceFields.style.display = tradeType === 'sell' ? '' : 'none';
+
+    // ILS mode: show buy or sell fields based on type
+    var ilsBuy = document.getElementById('ils-buy-fields');
+    var ilsSell = document.getElementById('ils-sell-fields');
+    if (ilsBuy) ilsBuy.style.display = (_mode === 'ils' && tradeType === 'buy') ? '' : 'none';
+    if (ilsSell) ilsSell.style.display = (_mode === 'ils' && tradeType === 'sell') ? '' : 'none';
 }
 </script>
 {% endblock %}

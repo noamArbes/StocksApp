@@ -90,9 +90,9 @@
         <td><span class="trade-type-badge trade-type-{{ ttype }}">{{ ttype|title }}</span></td>
         <td class="trade-ticker">{{ trade.ticker }}</td>
         <td>{{ trade.shares if trade.shares else '—' }}</td>
-        <td>{{ curr }}{{ "%.2f"|format(trade.buy_price) }}</td>
-        <td>{{ trade.buy_date }}</td>
-        <td>{% if trade.sell_price is not none %}{{ curr }}{{ "%.2f"|format(trade.sell_price) }}{% else %}—{% endif %}</td>
+        <td>{% if trade.get('buy_amount_ils') is not none and trade.get('buy_amount_ils') %}₪{{ "{:,.0f}".format(trade.buy_amount_ils) }}{% elif trade.buy_price is not none %}{{ curr }}{{ "%.2f"|format(trade.buy_price) }}{% else %}—{% endif %}</td>
+        <td>{{ trade.buy_date or '—' }}</td>
+        <td>{% if trade.get('sell_amount_ils') is not none and trade.get('sell_amount_ils') %}₪{{ "{:,.0f}".format(trade.sell_amount_ils) }}{% elif trade.sell_price is not none %}{{ curr }}{{ "%.2f"|format(trade.sell_price) }}{% else %}—{% endif %}</td>
         <td>{{ trade.sell_date or '—' }}</td>
         {% if pct is not none %}
         <td class="{% if pct >= 0 %}value-positive{% else %}value-negative{% endif %}">

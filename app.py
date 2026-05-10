@@ -1093,33 +1093,59 @@ def _trade_from_form(form, existing=None):
     if trade_type not in ("buy", "sell"):
         trade_type = "sell"
 
-    shares_raw = form.get("shares", "").strip()
-    if shares_raw:
-        try:
-            shares = float(shares_raw)
-        except ValueError:
-            return None, "Shares must be a number"
-    else:
+    ils_mode = form.get("ils_mode") == "1"
+
+    if ils_mode:
         shares = None
-
-    buy_price_raw = form.get("buy_price", "").strip()
-    sell_price_raw = form.get("sell_price", "").strip()
-    try:
-        buy_price = float(buy_price_raw) if buy_price_raw else None
-        sell_price = float(sell_price_raw) if sell_price_raw else None
-    except ValueError:
-        return None, "Prices must be numbers"
-    if buy_price is None:
-        return None, "Buy price is required"
-    if trade_type == "sell" and sell_price is None:
-        return None, "Sell price is required"
-
-    buy_date = form.get("buy_date", "").strip()
-    sell_date = form.get("sell_date", "").strip()
-    if not buy_date:
-        return None, "Buy date is required"
-    if trade_type == "sell" and not sell_date:
-        return None, "Sell date is required"
+        buy_price = None
+        sell_price = None
+        try:
+            buy_amount_raw = form.get("buy_amount_ils", "").strip()
+            sell_amount_raw = form.get("sell_amount_ils", "").strip()
+            buy_amount_ils = float(buy_amount_raw) if buy_amount_raw else None
+            sell_amount_ils = float(sell_amount_raw) if sell_amount_raw else None
+        except ValueError:
+            return None, "Amounts must be numbers"
+        buy_date = form.get("buy_date", "").strip() if trade_type == "buy" else None
+        sell_date = form.get("sell_date", "").strip() if trade_type == "sell" else None
+        if trade_type == "buy":
+            if buy_amount_ils is None:
+                return None, "Buy amount is required"
+            if not buy_date:
+                return None, "Buy date is required"
+        else:
+            if sell_amount_ils is None:
+                return None, "Sell amount is required"
+            if not sell_date:
+                return None, "Sell date is required"
+    else:
+        buy_amount_ils = None
+        sell_amount_ils = None
+        shares_raw = form.get("shares", "").strip()
+        if shares_raw:
+            try:
+                shares = float(shares_raw)
+            except ValueError:
+                return None, "Shares must be a number"
+        else:
+            shares = None
+        buy_price_raw = form.get("buy_price", "").strip()
+        sell_price_raw = form.get("sell_price", "").strip()
+        try:
+            buy_price = float(buy_price_raw) if buy_price_raw else None
+            sell_price = float(sell_price_raw) if sell_price_raw else None
+        except ValueError:
+            return None, "Prices must be numbers"
+        if buy_price is None:
+            return None, "Buy price is required"
+        if trade_type == "sell" and sell_price is None:
+            return None, "Sell price is required"
+        buy_date = form.get("buy_date", "").strip()
+        sell_date = form.get("sell_date", "").strip()
+        if not buy_date:
+            return None, "Buy date is required"
+        if trade_type == "sell" and not sell_date:
+            return None, "Sell date is required"
 
     return {
         "id": existing["id"] if existing else str(uuid.uuid4())[:8],
@@ -1131,6 +1157,8 @@ def _trade_from_form(form, existing=None):
         "buy_date": buy_date,
         "sell_price": sell_price,
         "sell_date": sell_date if trade_type == "sell" else None,
+        "buy_amount_ils": buy_amount_ils,
+        "sell_amount_ils": sell_amount_ils,
         "created_at": existing["created_at"] if existing else datetime.now(timezone.utc).isoformat(),
     }, None
 
