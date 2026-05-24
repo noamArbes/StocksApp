@@ -318,7 +318,7 @@ def dashboard():
 
     # --- History tab ---
     if tab == "history":
-        trades = read_trades()
+        trades = list(reversed(read_trades()))
         sell_trades = [t for t in trades if t.get("type", "sell") == "sell"]
         trade_pcts = {}
         trade_pls = {}
