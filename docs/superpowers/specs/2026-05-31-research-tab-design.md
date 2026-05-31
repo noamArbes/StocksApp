@@ -25,7 +25,7 @@ Both features live in one tab. Clicking a Find Tickers result opens its analysis
 ## Feature 1: Find Tickers
 
 ### Filters
-- Market / Exchange (TASE, NYSE, NASDAQ, S&P 500)
+- Market (Israel or US)
 - Security Type (Stock, ETF, Mutual Fund)
 - Sector / Industry
 - Momentum (% change over 1d / 1w / 1m)
