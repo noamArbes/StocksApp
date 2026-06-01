@@ -273,54 +273,66 @@ _REC_RANK = {
 }
 
 _MARKET_CAP_RANGES = {
-    "small": (0, 2_000),
-    "mid": (2_000, 10_000),
-    "large": (10_000, float("inf")),
+    "small":  (0,          2_000_000_000),
+    "mid":    (2_000_000_000, 10_000_000_000),
+    "large":  (10_000_000_000, float("inf")),
 }
 
-# Curated ticker lists by sector — avoids spamming Finnhub search + per-ticker calls
-_SECTOR_TICKERS: dict[str, list[str]] = {
-    "Technology":   ["AAPL", "MSFT", "NVDA", "GOOGL", "META", "AVGO", "AMD", "ORCL", "CRM", "INTC",
-                     "ADBE", "QCOM", "TXN", "AMAT", "MU", "NOW", "PANW", "SNPS", "KLAC", "LRCX"],
-    "Healthcare":   ["UNH", "JNJ", "LLY", "ABBV", "MRK", "TMO", "ABT", "DHR", "ISRG", "PFE",
-                     "AMGN", "BSX", "SYK", "GILD", "REGN", "VRTX", "MDT", "CI", "HCA", "ZTS"],
-    "Finance":      ["BRK-B", "JPM", "V", "MA", "BAC", "WFC", "GS", "MS", "BLK", "AXP",
-                     "SPGI", "C", "USB", "PGR", "TFC", "MCO", "ICE", "COF", "CME", "AON"],
-    "Energy":       ["XOM", "CVX", "COP", "EOG", "SLB", "MPC", "PSX", "VLO", "WMB", "OXY",
-                     "PXD", "DVN", "HES", "BKR", "HAL", "FANG", "MRO", "APA", "CTRA", "OVV"],
-    "Consumer":     ["AMZN", "TSLA", "HD", "MCD", "NKE", "SBUX", "TGT", "LOW", "TJX", "BKNG",
-                     "MAR", "HLT", "YUM", "DPZ", "ROST", "DLTR", "ORLY", "AZO", "BBY", "GPS"],
-    "Industrials":  ["CAT", "DE", "UPS", "HON", "RTX", "GE", "LMT", "BA", "UNP", "CSX",
-                     "NSC", "FDX", "EMR", "ETN", "PH", "ROK", "ITW", "GD", "NOC", "HWM"],
-    "Real Estate":  ["PLD", "AMT", "EQIX", "CCI", "PSA", "O", "WELL", "DLR", "AVB", "EQR",
-                     "SPG", "VICI", "WY", "ARE", "MAA", "UDR", "ESS", "NNN", "FR", "KIM"],
-    "Utilities":    ["NEE", "DUK", "SO", "D", "AEP", "SRE", "EXC", "XEL", "WEC", "ES",
-                     "ETR", "FE", "AES", "CMS", "NI", "DTE", "PPL", "EVRG", "POR", "OGE"],
+# Yahoo Finance sector names map
+_YF_SECTOR_MAP = {
+    "Technology":  "Technology",
+    "Healthcare":  "Healthcare",
+    "Finance":     "Financial Services",
+    "Energy":      "Energy",
+    "Consumer":    "Consumer Cyclical",
+    "Industrials": "Industrials",
+    "Real Estate": "Real Estate",
+    "Utilities":   "Utilities",
 }
 
-_ETF_TICKERS = ["SPY", "QQQ", "IWM", "VTI", "VOO", "VEA", "VWO", "GLD", "TLT", "IEF",
-                "XLK", "XLF", "XLE", "XLV", "XLI", "XLY", "XLRE", "XLU", "XLC", "XLB",
-                "ARKK", "ARKQ", "VNQ", "AGG", "BND", "LQD", "HYG", "EMB", "IAU", "SLV"]
 
-_DEFAULT_TICKERS = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "BRK-B", "JPM",
-                    "TSLA", "V", "UNH", "XOM", "JNJ", "LLY", "MA", "AVGO", "HD", "MRK",
-                    "PG", "ABBV"]
+def _get_us_candidates(security_type: str | None, sector: str | None,
+                       market_cap: str | None = None, limit: int = 40) -> list[str]:
+    """
+    Use Yahoo Finance EquityQuery screener to discover tickers dynamically.
+    Returns a list of ticker symbols matching the given filters.
+    Falls back to an empty list on failure (caller handles gracefully).
+    """
+    from yfinance import EquityQuery, screen
 
+    clauses: list = []
 
-def _get_us_candidates(security_type: str | None, sector: str | None) -> list[str]:
-    """Return a curated list of tickers to evaluate based on filters."""
-    if security_type == "etf":
-        return _ETF_TICKERS
-    if sector and sector in _SECTOR_TICKERS:
-        return _SECTOR_TICKERS[sector]
-    if sector:
-        # Unknown sector — fall back to default
-        return _DEFAULT_TICKERS
-    # No sector filter — return all sectors interleaved
-    all_tickers = []
-    for tickers in _SECTOR_TICKERS.values():
-        all_tickers.extend(tickers[:5])  # top 5 per sector
-    return all_tickers or _DEFAULT_TICKERS
+    # Exchange: US (NASDAQ + NYSE)
+    clauses.append(EquityQuery("is-in", ["exchange", "NMS", "NYQ"]))
+
+    # Sector filter
+    if sector and sector in _YF_SECTOR_MAP:
+        clauses.append(EquityQuery("eq", ["sector", _YF_SECTOR_MAP[sector]]))
+
+    # Market cap filter — Yahoo Finance uses raw dollar amounts
+    if market_cap and market_cap in _MARKET_CAP_RANGES:
+        lo, hi = _MARKET_CAP_RANGES[market_cap]
+        if lo > 0:
+            clauses.append(EquityQuery("gt", ["intradaymarketcap", lo]))
+        if hi < float("inf"):
+            clauses.append(EquityQuery("lt", ["intradaymarketcap", hi]))
+
+    query = EquityQuery("and", clauses) if len(clauses) > 1 else clauses[0]
+
+    try:
+        result = screen(query, sortField="percentchange", sortAsc=False, size=limit)
+        quotes = result.get("quotes", [])
+        return [q["symbol"] for q in quotes if q.get("symbol") and "." not in q["symbol"]]
+    except Exception as e:
+        print(f"[WARN] Yahoo Finance screener failed: {e}")
+        # Graceful fallback: broad US equity screen
+        try:
+            fallback_query = EquityQuery("is-in", ["exchange", "NMS", "NYQ"])
+            result = screen(fallback_query, sortField="percentchange", sortAsc=False, size=limit)
+            quotes = result.get("quotes", [])
+            return [q["symbol"] for q in quotes if q.get("symbol") and "." not in q["symbol"]]
+        except Exception:
+            return []
 
 
 def _get_israel_candidates(security_type: str | None, sector: str | None,
@@ -352,7 +364,8 @@ def find_tickers(market: str, security_type: str | None, sector: str | None,
     if market == "israel":
         return _find_tickers_israel(security_type, tase_cache or [], limit)
 
-    candidates = _get_us_candidates(security_type, sector)
+    # Yahoo Finance screener fetches a fresh, diverse candidate pool
+    candidates = _get_us_candidates(security_type, sector, market_cap, limit=limit * 3)
     results = []
 
     for ticker in candidates:
@@ -369,13 +382,6 @@ def find_tickers(market: str, security_type: str | None, sector: str | None,
 
         analyst = get_analyst_data(ticker, quote["price"])
         profile = get_company_profile(ticker)
-
-        # Market cap filter
-        if market_cap and profile:
-            cap = profile.get("market_cap") or 0
-            lo, hi = _MARKET_CAP_RANGES.get(market_cap, (0, float("inf")))
-            if not (lo <= cap < hi):
-                continue
 
         results.append({
             "ticker": ticker,
