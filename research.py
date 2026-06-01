@@ -57,8 +57,8 @@ def get_quote(ticker: str) -> dict | None:
             "day_high": round(info.day_high, 2) if info.day_high else None,
             "day_low": round(info.day_low, 2) if info.day_low else None,
             "change_pct": change_pct,
-            "week52_high": round(info.fifty_two_week_high, 2) if info.fifty_two_week_high else None,
-            "week52_low": round(info.fifty_two_week_low, 2) if info.fifty_two_week_low else None,
+            "week52_high": round(info.year_high, 2) if info.year_high else None,
+            "week52_low": round(info.year_low, 2) if info.year_low else None,
         }
     except Exception as e:
         print(f"[WARN] yfinance quote fallback failed for {ticker}: {e}")
