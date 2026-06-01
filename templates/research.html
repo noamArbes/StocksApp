@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="toolbar">
+  <h2>Research</h2>
+</div>
+
+<div class="tab-bar">
+  <button class="tab tab-active" id="tab-find" onclick="switchTab('find')">Find Tickers</button>
+  <button class="tab" id="tab-analyze" onclick="switchTab('analyze')">Analyze Stock</button>
+</div>
+
+{# ── Find Tickers ── #}
+<div id="panel-find">
+
+  {# Preset chips #}
+  <div id="preset-chips" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px"></div>
+
+  {# Filter panel #}
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+      <div>
+        <label class="form-label">Market</label>
+        <select id="f-market" class="form-input">
+          <option value="us">United States</option>
+          <option value="israel">Israel (TASE)</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Type</label>
+        <select id="f-type" class="form-input">
+          <option value="">Any</option>
+          <option value="stock">Stock</option>
+          <option value="etf">ETF</option>
+          <option value="fund">Fund</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Sector</label>
+        <select id="f-sector" class="form-input">
+          <option value="">Any</option>
+          <option>Technology</option>
+          <option>Healthcare</option>
+          <option>Finance</option>
+          <option>Energy</option>
+          <option>Consumer</option>
+          <option>Industrials</option>
+          <option>Real Estate</option>
+          <option>Utilities</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Momentum</label>
+        <select id="f-momentum" class="form-input">
+          <option value="">Any</option>
+          <option value="1d">Today</option>
+          <option value="1w">This Week</option>
+          <option value="1m">This Month</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Market Cap</label>
+        <select id="f-marketcap" class="form-input">
+          <option value="">Any</option>
+          <option value="small">Small (&lt;$2B)</option>
+          <option value="mid">Mid ($2B–$10B)</option>
+          <option value="large">Large (&gt;$10B)</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Sort By</label>
+        <select id="f-sort" class="form-input">
+          <option value="upside">Highest Upside %</option>
+          <option value="conviction">Strongest Conviction</option>
+          <option value="momentum">Best Momentum</option>
+          <option value="alpha">Alphabetical</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-primary" onclick="runSearch(0)">Search</button>
+      <button class="btn" onclick="openSavePreset()">Save as Preset</button>
+    </div>
+  </div>
+
+  {# Save preset modal #}
+  <div id="preset-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;align-items:center;justify-content:center">
+    <div class="card" style="width:320px">
+      <h3 style="margin-bottom:12px">Save Preset</h3>
+      <input id="preset-name-input" class="form-input" placeholder="e.g. Israeli Tech Stocks" style="margin-bottom:12px">
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="confirmSavePreset()">Save</button>
+        <button class="btn" onclick="closePresetModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  {# Results #}
+  <div id="find-results"></div>
+  <div id="find-load-more" style="display:none;text-align:center;margin-top:12px">
+    <button class="btn" onclick="loadMore()">Load More</button>
+  </div>
+</div>
+
+{# ── Analyze Stock ── #}
+<div id="panel-analyze" style="display:none">
+  <div class="card" style="margin-bottom:16px;display:flex;gap:8px">
+    <input id="analyze-ticker" class="form-input" placeholder="Enter ticker (e.g. AAPL)" style="flex:1">
+    <button class="btn btn-primary" onclick="runAnalysis()">Analyze</button>
+  </div>
+  <div id="analyze-results"></div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── XSS helpers ──
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function safeUrl(url) {
+  if (!url) return '#';
+  return /^https?:\/\//i.test(url) ? url : '#';
+}
+
+// ── Tab switching ──
+function switchTab(tab) {
+  document.getElementById('panel-find').style.display = tab === 'find' ? '' : 'none';
+  document.getElementById('panel-analyze').style.display = tab === 'analyze' ? '' : 'none';
+  document.getElementById('tab-find').className = 'tab' + (tab === 'find' ? ' tab-active' : '');
+  document.getElementById('tab-analyze').className = 'tab' + (tab === 'analyze' ? ' tab-active' : '');
+}
+
+// ── Presets ──
+let _currentOffset = 0;
+
+async function loadPresets() {
+  const res = await fetch('/api/research/presets');
+  const presets = await res.json();
+  const container = document.getElementById('preset-chips');
+  container.innerHTML = '';
+  presets.forEach(p => {
+    const chip = document.createElement('span');
+    chip.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:4px 12px;cursor:pointer;font-size:.85rem';
+    chip.innerHTML = `${p.name} <button onclick="deletePreset('${p.id}',event)" style="background:none;border:none;cursor:pointer;opacity:.5;font-size:.75rem">✕</button>`;
+    chip.onclick = () => applyPreset(p.filters);
+    container.appendChild(chip);
+  });
+}
+
+function applyPreset(filters) {
+  if (filters.market) document.getElementById('f-market').value = filters.market;
+  if (filters.security_type) document.getElementById('f-type').value = filters.security_type;
+  if (filters.sector) document.getElementById('f-sector').value = filters.sector;
+  if (filters.momentum) document.getElementById('f-momentum').value = filters.momentum;
+  if (filters.market_cap) document.getElementById('f-marketcap').value = filters.market_cap;
+  if (filters.sort_by) document.getElementById('f-sort').value = filters.sort_by;
+  runSearch(0);
+}
+
+function openSavePreset() {
+  document.getElementById('preset-modal').style.display = 'flex';
+  document.getElementById('preset-name-input').focus();
+}
+
+function closePresetModal() {
+  document.getElementById('preset-modal').style.display = 'none';
+  document.getElementById('preset-name-input').value = '';
+}
+
+async function confirmSavePreset() {
+  const name = document.getElementById('preset-name-input').value.trim();
+  if (!name) return;
+  const filters = currentFilters();
+  await fetch('/api/research/presets', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name, filters}),
+  });
+  closePresetModal();
+  loadPresets();
+}
+
+async function deletePreset(id, e) {
+  e.stopPropagation();
+  await fetch(`/api/research/presets/${id}`, {method: 'DELETE'});
+  loadPresets();
+}
+
+// ── Find Tickers ──
+function currentFilters() {
+  return {
+    market: document.getElementById('f-market').value,
+    security_type: document.getElementById('f-type').value || null,
+    sector: document.getElementById('f-sector').value || null,
+    momentum: document.getElementById('f-momentum').value || null,
+    market_cap: document.getElementById('f-marketcap').value || null,
+    sort_by: document.getElementById('f-sort').value,
+  };
+}
+
+async function runSearch(offset) {
+  _currentOffset = offset;
+  const f = currentFilters();
+  const sort = document.getElementById('f-sort').value;
+  const params = new URLSearchParams({
+    market: f.market,
+    sort_by: sort,
+    offset,
+    ...(f.security_type && {security_type: f.security_type}),
+    ...(f.sector && {sector: f.sector}),
+    ...(f.momentum && {momentum: f.momentum}),
+    ...(f.market_cap && {market_cap: f.market_cap}),
+  });
+  const container = document.getElementById('find-results');
+  if (offset === 0) container.innerHTML = '<p style="opacity:.5">Loading...</p>';
+  const res = await fetch('/api/research/find-tickers?' + params);
+  const data = await res.json();
+  if (offset === 0) container.innerHTML = '';
+  if (!data.results || data.results.length === 0) {
+    if (offset === 0) container.innerHTML = '<p style="opacity:.5">No results found.</p>';
+    document.getElementById('find-load-more').style.display = 'none';
+    return;
+  }
+  data.results.forEach(r => container.appendChild(buildTickerCard(r)));
+  document.getElementById('find-load-more').style.display = data.has_more ? 'block' : 'none';
+}
+
+function loadMore() {
+  runSearch(_currentOffset + 10);
+}
+
+function buildTickerCard(r) {
+  const upside = r.upside_pct != null ? `${r.upside_pct > 0 ? '+' : ''}${r.upside_pct}%` : '—';
+  const change = r.change_pct != null ? `${r.change_pct > 0 ? '+' : ''}${r.change_pct.toFixed(2)}%` : '';
+  const recColor = {'Strong Buy':'#16a34a','Buy':'#4ade80','Hold':'#ca8a04','Sell':'#f87171','Strong Sell':'#dc2626'}[r.recommendation] || '#888';
+  const div = document.createElement('div');
+  div.className = 'card';
+  div.style.cssText = 'margin-bottom:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:12px';
+  div.onclick = () => openAnalysis(esc(r.ticker));
+  div.innerHTML = `
+    <div>
+      <strong>${esc(r.ticker)}</strong>
+      <span style="opacity:.6;font-size:.85rem;margin-left:6px">${esc(r.name)}</span>
+      ${r.sector ? `<span style="opacity:.4;font-size:.75rem;margin-left:6px">${esc(r.sector)}</span>` : ''}
+    </div>
+    <div style="display:flex;gap:16px;align-items:center;flex-shrink:0">
+      <span style="font-size:.85rem;opacity:.7">${change}</span>
+      ${r.recommendation ? `<span style="background:${recColor};color:#fff;padding:2px 8px;border-radius:999px;font-size:.8rem;font-weight:600">${esc(r.recommendation)}</span>` : ''}
+      <div style="text-align:right;font-size:.85rem">
+        ${r.target_mean ? `<div>Target: $${r.target_mean}</div>` : ''}
+        <div style="opacity:.6">Upside: ${upside} · ${r.num_analysts || 0} analysts</div>
+      </div>
+    </div>`;
+  return div;
+}
+
+function openAnalysis(ticker) {
+  switchTab('analyze');
+  document.getElementById('analyze-ticker').value = ticker;
+  runAnalysis();
+}
+
+// ── Analyze Stock ──
+async function runAnalysis() {
+  const ticker = document.getElementById('analyze-ticker').value.trim().toUpperCase();
+  if (!ticker) return;
+  const container = document.getElementById('analyze-results');
+  container.innerHTML = '<p style="opacity:.5">Loading...</p>';
+  const res = await fetch('/api/research/analyze?ticker=' + encodeURIComponent(ticker));
+  const data = await res.json();
+  if (data.error) {
+    container.innerHTML = `<p style="color:var(--red)">${data.error}</p>`;
+    return;
+  }
+  container.innerHTML = buildAnalysis(ticker, data);
+  fetchAiSummary(ticker);
+}
+
+function buildAnalysis(ticker, d) {
+  const q = d.quote || {};
+  const a = d.analyst || {};
+  const t = d.technicals || {};
+  const f = d.fundamentals || {};
+  const news = d.news || [];
+  const recColor = {'Strong Buy':'#16a34a','Buy':'#4ade80','Hold':'#ca8a04','Sell':'#f87171','Strong Sell':'#dc2626'}[a.recommendation] || '#888';
+  const changeClass = (q.change_pct || 0) >= 0 ? 'value-positive' : 'value-negative';
+
+  return `
+    <div class="card" style="margin-bottom:12px">
+      <h3>${esc(ticker)} ${d.profile ? '— ' + esc(d.profile.name) : ''}</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:8px">
+        <div><div class="form-label">Price</div><strong>$${q.price}</strong> <span class="${changeClass}">${q.change_pct != null ? (q.change_pct > 0 ? '+' : '') + q.change_pct.toFixed(2) + '%' : ''}</span></div>
+        <div><div class="form-label">Day Range</div>${q.day_low} – ${q.day_high}</div>
+      </div>
+    </div>
+    ${a.recommendation ? `
+    <div class="card" style="margin-bottom:12px">
+      <h3>Analyst Consensus</h3>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:8px;flex-wrap:wrap">
+        <span style="background:${recColor};color:#fff;padding:4px 14px;border-radius:999px;font-weight:700">${esc(a.recommendation)}</span>
+        ${a.target_mean ? `<span>Target: <strong>$${a.target_mean}</strong></span>` : ''}
+        ${a.upside_pct != null ? `<span class="${a.upside_pct >= 0 ? 'value-positive' : 'value-negative'}">Upside: ${a.upside_pct > 0 ? '+' : ''}${a.upside_pct}%</span>` : ''}
+        <span style="opacity:.6">${a.num_analysts} analysts</span>
+      </div>
+    </div>` : ''}
+    ${Object.values(t).some(v => v != null) ? `
+    <div class="card" style="margin-bottom:12px">
+      <h3>Technical Indicators</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:8px">
+        ${t.rsi != null ? `<div><div class="form-label">RSI (14)</div><strong>${t.rsi}</strong></div>` : ''}
+        ${t.macd != null ? `<div><div class="form-label">MACD</div><strong>${t.macd}</strong></div>` : ''}
+        ${t.ma50 != null ? `<div><div class="form-label">MA 50d</div><strong>$${t.ma50}</strong></div>` : ''}
+        ${t.ma200 != null ? `<div><div class="form-label">MA 200d</div><strong>$${t.ma200}</strong></div>` : ''}
+      </div>
+    </div>` : ''}
+    ${Object.values(f).some(v => v != null) ? `
+    <div class="card" style="margin-bottom:12px">
+      <h3>Fundamentals</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:8px">
+        ${f.pe_ratio != null ? `<div><div class="form-label">P/E Ratio</div><strong>${f.pe_ratio}</strong></div>` : ''}
+        ${f.eps != null ? `<div><div class="form-label">EPS</div><strong>$${f.eps}</strong></div>` : ''}
+        ${f.revenue_growth_pct != null ? `<div><div class="form-label">Revenue Growth</div><strong>${f.revenue_growth_pct > 0 ? '+' : ''}${f.revenue_growth_pct}%</strong></div>` : ''}
+        ${f.profit_margin_pct != null ? `<div><div class="form-label">Profit Margin</div><strong>${f.profit_margin_pct}%</strong></div>` : ''}
+      </div>
+    </div>` : ''}
+    ${news.length ? `
+    <div class="card" style="margin-bottom:12px">
+      <h3>Recent News</h3>
+      <ul style="margin:8px 0 0;padding-left:0;list-style:none">
+        ${news.map(n => `
+        <li style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:8px">
+          <a href="${safeUrl(n.url)}" target="_blank" style="color:inherit">${esc(n.headline)}</a>
+          <span style="flex-shrink:0;font-size:.75rem;padding:2px 8px;border-radius:999px;background:${n.sentiment==='bullish'?'#dcfce7':n.sentiment==='bearish'?'#fee2e2':'#f3f4f6'};color:${n.sentiment==='bullish'?'#16a34a':n.sentiment==='bearish'?'#dc2626':'#6b7280'}">${n.sentiment}</span>
+        </li>`).join('')}
+      </ul>
+    </div>` : ''}
+    <div class="card" id="ai-summary-card">
+      <h3>AI Summary</h3>
+      <p id="ai-summary-text" style="opacity:.5;margin-top:8px">Generating summary...</p>
+    </div>`;
+}
+
+async function fetchAiSummary(ticker) {
+  const res = await fetch('/api/research/ai-summary?ticker=' + encodeURIComponent(ticker));
+  const data = await res.json();
+  const el = document.getElementById('ai-summary-text');
+  if (el) el.textContent = data.summary || 'Could not generate summary.';
+  if (el) el.style.opacity = '1';
+}
+
+// Init
+loadPresets();
+</script>
+{% endblock %}

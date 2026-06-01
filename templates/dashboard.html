@@ -15,6 +15,8 @@
        class="tab {% if tab == 'history' %}tab-active{% endif %}">Trade History</a>
     <a href="{{ url_for('savings') }}"
        class="tab {% if tab == 'savings' %}tab-active{% endif %}">Savings</a>
+    <a href="{{ url_for('research_tab') }}"
+       class="tab">Research</a>
     {% if tab == 'history' %}
     <a href="{{ url_for('trade_new') }}" class="btn btn-primary" style="margin-left:auto">+ Add Trade</a>
     {% endif %}
