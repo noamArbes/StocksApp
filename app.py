@@ -15,6 +15,7 @@ from flask import Flask, redirect, render_template, request, session, url_for, j
 import checker
 import cities_data
 import tase
+import research
 
 # --- Startup validation ---
 _UI_PASSWORD = os.environ.get("UI_PASSWORD")
@@ -35,6 +36,7 @@ _SNAPSHOTS_PATH = checker.get_snapshots_path()
 _SIEMENS_PATH = checker.get_siemens_path()
 _SIEMENS_PORTAL_URL = "https://samlparticipant.equateplus.com/EquatePlusParticipant2/start"
 _tase_cache = tase.load_securities_cache()
+_PRESETS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "presets.json")
 
 
 def _alarms_path():
@@ -1163,6 +1165,101 @@ def _trade_from_form(form, existing=None):
         "sell_amount_ils": sell_amount_ils,
         "created_at": existing["created_at"] if existing else datetime.now(timezone.utc).isoformat(),
     }, None
+
+
+# --- Research routes ---
+
+@app.route("/research")
+@login_required
+def research_tab():
+    return render_template("research.html")
+
+
+@app.route("/api/research/analyze")
+@login_required
+def research_analyze():
+    ticker = request.args.get("ticker", "").strip().upper()
+    if not ticker:
+        return jsonify({"error": "ticker required"}), 400
+    if research.is_tase_ticker(ticker):
+        return jsonify({"error": "TASE analysis not yet supported"}), 400
+    quote = research.get_quote(ticker)
+    if not quote:
+        return jsonify({"error": f"Could not fetch data for {ticker}"}), 404
+    analyst = research.get_analyst_data(ticker, quote["price"])
+    profile = research.get_company_profile(ticker)
+    technicals = research.get_technicals(ticker)
+    fundamentals = research.get_fundamentals(ticker)
+    news = research.get_news(ticker)
+    return jsonify({
+        "ticker": ticker,
+        "quote": quote,
+        "analyst": analyst,
+        "profile": profile,
+        "technicals": technicals,
+        "fundamentals": fundamentals,
+        "news": news,
+    })
+
+
+@app.route("/api/research/ai-summary")
+@login_required
+def research_ai_summary():
+    ticker = request.args.get("ticker", "").strip().upper()
+    if not ticker:
+        return jsonify({"error": "ticker required"}), 400
+    quote = research.get_quote(ticker)
+    analyst = research.get_analyst_data(ticker, quote["price"]) if quote else None
+    fundamentals = research.get_fundamentals(ticker)
+    news = research.get_news(ticker)
+    summary = research.get_ai_summary(ticker, {
+        "quote": quote, "analyst": analyst,
+        "fundamentals": fundamentals, "news": news,
+    })
+    return jsonify({"summary": summary})
+
+
+@app.route("/api/research/find-tickers")
+@login_required
+def research_find_tickers():
+    market = request.args.get("market", "us")
+    security_type = request.args.get("security_type") or None
+    sector = request.args.get("sector") or None
+    momentum = request.args.get("momentum") or None
+    market_cap = request.args.get("market_cap") or None
+    sort_by = request.args.get("sort_by", "upside")
+    offset = int(request.args.get("offset", 0))
+    limit = 10
+    results = research.find_tickers(
+        market=market, security_type=security_type, sector=sector,
+        momentum=momentum, market_cap=market_cap, limit=offset + limit
+    )
+    sorted_results = research.sort_ticker_results(results, sort_by)
+    page = sorted_results[offset:offset + limit]
+    return jsonify({"results": page, "has_more": len(sorted_results) > offset + limit})
+
+
+@app.route("/api/research/presets", methods=["GET"])
+@login_required
+def research_presets_list():
+    return jsonify(research.load_presets(_PRESETS_PATH))
+
+
+@app.route("/api/research/presets", methods=["POST"])
+@login_required
+def research_presets_save():
+    body = request.get_json()
+    if not body or not body.get("name"):
+        return jsonify({"error": "name required"}), 400
+    preset = research.save_preset(_PRESETS_PATH, body["name"], body.get("filters", {}))
+    return jsonify(preset)
+
+
+@app.route("/api/research/presets/<preset_id>", methods=["DELETE"])
+@login_required
+def research_presets_delete(preset_id):
+    research.delete_preset(_PRESETS_PATH, preset_id)
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":
