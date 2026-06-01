@@ -346,8 +346,10 @@ async function fetchAiSummary(ticker) {
   const res = await fetch('/api/research/ai-summary?ticker=' + encodeURIComponent(ticker));
   const data = await res.json();
   const el = document.getElementById('ai-summary-text');
-  if (el) el.textContent = data.summary || 'Could not generate summary.';
+  const text = data.summary || 'Could not generate summary.';
+  if (el) el.textContent = text;
   if (el) el.style.opacity = '1';
+  if (el && text.startsWith('ERROR:')) el.style.color = '#dc2626';
 }
 
 // Init

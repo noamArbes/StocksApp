@@ -286,6 +286,8 @@ P/E: {fundamentals.get('pe_ratio')} | EPS: {fundamentals.get('eps')} | Revenue g
 Recent news:
 {news_lines}"""
 
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        return "ERROR: ANTHROPIC_API_KEY is not set in environment variables."
     try:
         client = _get_anthropic_client()
         response = client.messages.create(
@@ -296,7 +298,7 @@ Recent news:
         return response.content[0].text.strip()
     except Exception as e:
         print(f"[WARN] AI summary failed for {ticker}: {e}")
-        return ""
+        return f"ERROR: {e}"
 
 
 _REC_RANK = {
