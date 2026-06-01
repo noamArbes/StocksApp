@@ -244,11 +244,12 @@ def get_ai_summary(ticker: str, data: dict) -> str:
 
     news_lines = "\n".join(f"- {n['headline']} ({n['sentiment']})" for n in news[:5])
 
+    change_pct = quote.get("change_pct") or 0
     prompt = f"""You are a financial analyst. Write a 2-3 sentence summary for {ticker} based on the data below.
 Cover: what the company does (briefly), the key opportunity or risk right now, and the overall outlook.
 Be factual and concise. Do not use bullet points.
 
-Price: ${quote.get('price')} ({quote.get('change_pct', 0):+.1f}% today)
+Price: ${quote.get('price')} ({change_pct:+.1f}% today)
 Analyst consensus: {analyst.get('recommendation')} | Target: ${analyst.get('target_mean')} | Upside: {analyst.get('upside_pct')}% | Analysts: {analyst.get('num_analysts')}
 P/E: {fundamentals.get('pe_ratio')} | EPS: {fundamentals.get('eps')} | Revenue growth: {fundamentals.get('revenue_growth_pct')}% | Profit margin: {fundamentals.get('profit_margin_pct')}%
 Recent news:
@@ -321,6 +322,10 @@ def find_tickers(market: str, security_type: str | None, sector: str | None,
             if not (lo <= cap < hi):
                 continue
 
+        # Momentum filter: only keep tickers with positive today's change
+        if momentum and (quote.get("change_pct") or 0) <= 0:
+            continue
+
         results.append({
             "ticker": ticker,
             "name": profile.get("name", ticker) if profile else ticker,
@@ -351,6 +356,7 @@ def sort_ticker_results(results: list[dict], sort_by: str) -> list[dict]:
                       reverse=True)
     if sort_by == "momentum":
         return sorted(results, key=lambda r: r.get("change_pct") or -999, reverse=True)
+    # "alpha" and unknown values: sort alphabetically
     return sorted(results, key=lambda r: r.get("ticker", ""))
 
 

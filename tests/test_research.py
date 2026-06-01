@@ -204,6 +204,25 @@ def test_save_and_load_preset(tmp_path):
     assert presets[0]["filters"]["market"] == "israel"
 
 
+def test_find_tickers_momentum_filters_negative_change():
+    mock_search = {"result": [
+        {"symbol": "AAPL", "description": "Apple Inc", "type": "Common Stock"},
+    ]}
+    mock_quote_negative = {"c": 150.0, "h": 155.0, "l": 148.0, "pc": 151.0, "dp": -0.66,
+                           "52WeekHigh": 180.0, "52WeekLow": 120.0}
+    with patch("research._finnhub_get") as mock_get:
+        mock_get.side_effect = [
+            mock_search,
+            mock_quote_negative,  # get_quote: negative change
+            {},                   # get_analyst_data: /stock/recommendation (empty → None)
+            {},                   # get_analyst_data: /stock/price-target
+            {},                   # get_company_profile AAPL
+        ]
+        results = research.find_tickers(market="us", security_type=None, sector=None,
+                                        momentum="1d", market_cap=None, limit=10)
+    assert len(results) == 0  # filtered out due to negative momentum
+
+
 def test_delete_preset(tmp_path):
     path = str(tmp_path / "presets.json")
     research.save_preset(path, "Test", {"market": "us"})
