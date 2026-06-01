@@ -39,8 +39,8 @@ def get_quote(ticker: str) -> dict | None:
         "day_high": data.get("h"),
         "day_low": data.get("l"),
         "change_pct": data.get("dp"),
-        "week52_high": data.get("h"),
-        "week52_low": data.get("l"),
+        "week52_high": data.get("52WeekHigh"),
+        "week52_low": data.get("52WeekLow"),
     }
 
 
@@ -65,8 +65,9 @@ def get_analyst_data(ticker: str, current_price: float) -> dict | None:
     """Fetch analyst recommendation and price target for a US ticker."""
     rec_data = _finnhub_get("/stock/recommendation", {"symbol": ticker})
     target_data = _finnhub_get("/stock/price-target", {"symbol": ticker})
-    if not rec_data or not target_data:
+    if not rec_data:
         return None
+    # target_data may be empty — that's OK, just means no price target
 
     if isinstance(rec_data, list):
         rec_data = rec_data[0] if rec_data else {}
@@ -126,7 +127,7 @@ def get_company_profile(ticker: str) -> dict | None:
 
 
 _BULLISH_WORDS = {"surge", "soar", "beat", "record", "profit", "gain", "rally", "upgrade",
-                  "crush", "strong", "growth", "bullish", "positive", "rise", "raises"}
+                  "crush", "crushes", "strong", "growth", "bullish", "positive", "rise", "raises"}
 _BEARISH_WORDS = {"fall", "drop", "miss", "loss", "decline", "downgrade", "risk", "probe",
                   "lawsuit", "cut", "weak", "bearish", "negative", "plunge", "warning", "layoff"}
 
@@ -177,7 +178,8 @@ def _calc_rsi(prices: "pd.Series", period: int = 14) -> float | None:
     rs = gain / loss
     rsi = 100 - (100 / (1 + rs))
     val = rsi.iloc[-1]
-    return round(float(val), 2) if not (val != val) else None
+    import pandas as pd
+    return round(float(val), 2) if not pd.isna(val) else None
 
 
 def _calc_macd(prices: "pd.Series") -> tuple[float | None, float | None]:

@@ -77,8 +77,19 @@ def test_get_news_returns_sentiment_tagged_headlines():
         result = research.get_news("AAPL", limit=5)
     assert len(result) == 2
     assert result[0]["headline"] == "Apple crushes earnings expectations"
-    assert result[0]["sentiment"] in ("bullish", "bearish", "neutral")
+    assert result[0]["sentiment"] == "bullish"
+    assert result[1]["sentiment"] == "bearish"
     assert "url" in result[0]
+
+
+def test_get_analyst_data_handles_list_response():
+    mock_rec = [{"buy": 10, "hold": 5, "sell": 2, "strongBuy": 8, "strongSell": 1, "period": "2024-01-01"}]
+    mock_target = {"targetMean": 180.0, "targetHigh": 200.0, "targetLow": 160.0}
+    with patch("research._finnhub_get") as mock_get:
+        mock_get.side_effect = [mock_rec, mock_target]
+        result = research.get_analyst_data("AAPL", current_price=150.0)
+    assert result is not None
+    assert result["recommendation"] in ("Strong Buy", "Buy", "Hold", "Sell", "Strong Sell")
 
 
 def test_get_technicals_returns_expected_keys():
