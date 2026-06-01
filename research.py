@@ -228,3 +228,153 @@ def get_fundamentals(ticker: str) -> dict | None:
         "revenue_growth_pct": round(rev_growth * 100, 1) if rev_growth is not None else None,
         "profit_margin_pct": round(margin * 100, 1) if margin is not None else None,
     }
+
+
+def _get_anthropic_client():
+    import anthropic
+    return anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+
+
+def get_ai_summary(ticker: str, data: dict) -> str:
+    """Call Claude to generate a 2-3 sentence analysis summary."""
+    quote = data.get("quote") or {}
+    analyst = data.get("analyst") or {}
+    fundamentals = data.get("fundamentals") or {}
+    news = data.get("news") or []
+
+    news_lines = "\n".join(f"- {n['headline']} ({n['sentiment']})" for n in news[:5])
+
+    prompt = f"""You are a financial analyst. Write a 2-3 sentence summary for {ticker} based on the data below.
+Cover: what the company does (briefly), the key opportunity or risk right now, and the overall outlook.
+Be factual and concise. Do not use bullet points.
+
+Price: ${quote.get('price')} ({quote.get('change_pct', 0):+.1f}% today)
+Analyst consensus: {analyst.get('recommendation')} | Target: ${analyst.get('target_mean')} | Upside: {analyst.get('upside_pct')}% | Analysts: {analyst.get('num_analysts')}
+P/E: {fundamentals.get('pe_ratio')} | EPS: {fundamentals.get('eps')} | Revenue growth: {fundamentals.get('revenue_growth_pct')}% | Profit margin: {fundamentals.get('profit_margin_pct')}%
+Recent news:
+{news_lines}"""
+
+    try:
+        client = _get_anthropic_client()
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content[0].text.strip()
+    except Exception as e:
+        print(f"[WARN] AI summary failed for {ticker}: {e}")
+        return ""
+
+
+_REC_RANK = {
+    "Strong Buy": 5, "Buy": 4, "Hold": 3, "Sell": 2, "Strong Sell": 1, None: 0
+}
+
+_MARKET_CAP_RANGES = {
+    "small": (0, 2_000),
+    "mid": (2_000, 10_000),
+    "large": (10_000, float("inf")),
+}
+
+
+def find_tickers(market: str, security_type: str | None, sector: str | None,
+                 momentum: str | None, market_cap: str | None, limit: int = 10) -> list[dict]:
+    """
+    Search for tickers matching the given filters.
+    market: 'us' or 'israel'
+    security_type: 'stock', 'etf', 'fund', or None
+    sector: sector string or None
+    momentum: '1d', '1w', '1m', or None
+    market_cap: 'small', 'mid', 'large', or None
+    Returns list of dicts with ticker, name, recommendation, target_mean, upside_pct, num_analysts, price, change_pct.
+    """
+    if market == "israel":
+        return []
+
+    query = sector or security_type or "S&P 500"
+    raw = _finnhub_get("/search", {"q": query})
+    candidates = raw.get("result", []) if isinstance(raw, dict) else []
+
+    results = []
+    for item in candidates[:50]:
+        ticker = item.get("symbol", "")
+        if not ticker or "." in ticker:
+            continue
+
+        item_type = item.get("type", "").lower()
+        if security_type == "stock" and item_type not in ("common stock", ""):
+            continue
+        if security_type == "etf" and "etf" not in item_type:
+            continue
+
+        quote = get_quote(ticker)
+        if not quote:
+            continue
+
+        analyst = get_analyst_data(ticker, quote["price"])
+        profile = get_company_profile(ticker)
+
+        if market_cap and profile:
+            cap = profile.get("market_cap") or 0
+            lo, hi = _MARKET_CAP_RANGES.get(market_cap, (0, float("inf")))
+            if not (lo <= cap < hi):
+                continue
+
+        results.append({
+            "ticker": ticker,
+            "name": profile.get("name", ticker) if profile else ticker,
+            "sector": profile.get("sector") if profile else None,
+            "recommendation": analyst.get("recommendation") if analyst else None,
+            "color": analyst.get("color") if analyst else "gray",
+            "target_mean": analyst.get("target_mean") if analyst else None,
+            "upside_pct": analyst.get("upside_pct") if analyst else None,
+            "num_analysts": analyst.get("num_analysts") if analyst else 0,
+            "price": quote["price"],
+            "change_pct": quote["change_pct"],
+        })
+
+        if len(results) >= limit * 2:
+            break
+
+    return results
+
+
+def sort_ticker_results(results: list[dict], sort_by: str) -> list[dict]:
+    """Sort find-ticker results. sort_by: 'upside', 'conviction', 'momentum', 'alpha'."""
+    if sort_by == "upside":
+        return sorted(results, key=lambda r: r.get("upside_pct") or -999, reverse=True)
+    if sort_by == "conviction":
+        return sorted(results,
+                      key=lambda r: (_REC_RANK.get(r.get("recommendation"), 0),
+                                     r.get("num_analysts") or 0),
+                      reverse=True)
+    if sort_by == "momentum":
+        return sorted(results, key=lambda r: r.get("change_pct") or -999, reverse=True)
+    return sorted(results, key=lambda r: r.get("ticker", ""))
+
+
+def load_presets(path: str) -> list[dict]:
+    """Load saved filter presets from JSON file."""
+    try:
+        with open(path, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def save_preset(path: str, name: str, filters: dict) -> dict:
+    """Append a named preset. Returns the new preset dict."""
+    presets = load_presets(path)
+    preset = {"id": str(_uuid.uuid4())[:8], "name": name, "filters": filters}
+    presets.append(preset)
+    with open(path, "w") as f:
+        json.dump(presets, f, indent=2)
+    return preset
+
+
+def delete_preset(path: str, preset_id: str) -> None:
+    """Remove a preset by id."""
+    presets = [p for p in load_presets(path) if p.get("id") != preset_id]
+    with open(path, "w") as f:
+        json.dump(presets, f, indent=2)

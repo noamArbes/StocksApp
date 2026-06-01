@@ -130,3 +130,84 @@ def test_get_fundamentals_returns_expected_keys():
     assert result["eps"] == 6.13
     assert result["revenue_growth_pct"] == pytest.approx(8.0)
     assert result["profit_margin_pct"] == pytest.approx(25.0)
+
+
+def test_get_ai_summary_returns_string():
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(
+        content=[MagicMock(text="Apple is a technology company with strong fundamentals.")]
+    )
+    with patch("research._get_anthropic_client", return_value=mock_client):
+        result = research.get_ai_summary("AAPL", {
+            "quote": {"price": 150.0, "change_pct": 0.5},
+            "analyst": {"recommendation": "Buy", "target_mean": 180.0, "upside_pct": 20.0, "num_analysts": 20},
+            "fundamentals": {"pe_ratio": 28.0, "eps": 6.0, "revenue_growth_pct": 8.0, "profit_margin_pct": 25.0},
+            "news": [{"headline": "Apple beats earnings", "sentiment": "bullish"}],
+        })
+    assert isinstance(result, str)
+    assert len(result) > 10
+
+
+def test_find_tickers_filters_by_market_us():
+    mock_search = {"result": [
+        {"symbol": "AAPL", "description": "Apple Inc", "type": "Common Stock"},
+        {"symbol": "MSFT", "description": "Microsoft", "type": "Common Stock"},
+    ]}
+    mock_quote = {"c": 150.0, "h": 155.0, "l": 148.0, "pc": 149.0, "dp": 0.67,
+                  "52WeekHigh": 180.0, "52WeekLow": 120.0}
+    with patch("research._finnhub_get") as mock_get:
+        mock_get.side_effect = [
+            mock_search,    # /search
+            mock_quote,     # get_quote AAPL
+            {},             # get_analyst_data rec (empty → returns None after 1 call)
+            {},             # get_company_profile AAPL
+            mock_quote,     # get_quote MSFT
+            {},             # get_analyst_data rec (empty → returns None after 1 call)
+            {},             # get_company_profile MSFT
+        ]
+        results = research.find_tickers(market="us", security_type="stock", sector=None,
+                                        momentum=None, market_cap=None, limit=10)
+    assert len(results) > 0
+    assert all("ticker" in r for r in results)
+
+
+def test_sort_ticker_results_by_upside():
+    results = [
+        {"ticker": "A", "upside_pct": 5.0, "recommendation": "Buy", "num_analysts": 10},
+        {"ticker": "B", "upside_pct": 20.0, "recommendation": "Strong Buy", "num_analysts": 15},
+        {"ticker": "C", "upside_pct": 10.0, "recommendation": "Hold", "num_analysts": 5},
+    ]
+    sorted_results = research.sort_ticker_results(results, sort_by="upside")
+    assert sorted_results[0]["ticker"] == "B"
+    assert sorted_results[1]["ticker"] == "C"
+
+
+def test_sort_ticker_results_by_conviction():
+    results = [
+        {"ticker": "A", "upside_pct": 5.0, "recommendation": "Buy", "num_analysts": 10},
+        {"ticker": "B", "upside_pct": 20.0, "recommendation": "Strong Buy", "num_analysts": 15},
+        {"ticker": "C", "upside_pct": 10.0, "recommendation": "Hold", "num_analysts": 5},
+    ]
+    sorted_results = research.sort_ticker_results(results, sort_by="conviction")
+    assert sorted_results[0]["ticker"] == "B"
+
+
+def test_save_and_load_preset(tmp_path):
+    path = str(tmp_path / "presets.json")
+    research.save_preset(path, "Israeli Tech", {
+        "market": "israel", "security_type": "stock",
+        "sector": "Technology", "momentum": None, "market_cap": None
+    })
+    presets = research.load_presets(path)
+    assert len(presets) == 1
+    assert presets[0]["name"] == "Israeli Tech"
+    assert presets[0]["filters"]["market"] == "israel"
+
+
+def test_delete_preset(tmp_path):
+    path = str(tmp_path / "presets.json")
+    research.save_preset(path, "Test", {"market": "us"})
+    presets = research.load_presets(path)
+    preset_id = presets[0]["id"]
+    research.delete_preset(path, preset_id)
+    assert research.load_presets(path) == []
