@@ -265,14 +265,6 @@ def get_technicals(ticker: str) -> dict | None:
     else:
         macd_interp = None
 
-    ma50_signal = None
-    if ma50 is not None:
-        ma50_signal = "Bullish — price above MA50" if current_price >= ma50 else "Bearish — price below MA50"
-
-    ma200_signal = None
-    if ma200 is not None:
-        ma200_signal = "Bullish — price above MA200" if current_price >= ma200 else "Bearish — price below MA200"
-
     return {
         "rsi": rsi,
         "rsi_signal": rsi_signal,
@@ -280,9 +272,7 @@ def get_technicals(ticker: str) -> dict | None:
         "macd_signal": macd_signal,
         "macd_interp": macd_interp,
         "ma50": ma50,
-        "ma50_signal": ma50_signal,
         "ma200": ma200,
-        "ma200_signal": ma200_signal,
     }
 
 

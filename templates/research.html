@@ -329,16 +329,8 @@ function buildAnalysis(ticker, d) {
           <strong>${t.macd}</strong>
           ${t.macd_interp ? `<div style="font-size:.75rem;margin-top:2px;color:${t.macd_interp === 'Bullish' ? '#16a34a' : '#dc2626'}">${t.macd_interp}</div>` : ''}
         </div>` : ''}
-        ${t.ma50 != null ? `<div>
-          <div class="form-label">MA 50d</div>
-          <strong>$${t.ma50}</strong>
-          ${t.ma50_signal ? `<div style="font-size:.75rem;margin-top:2px;color:${t.ma50_signal.includes('Bullish') ? '#16a34a' : '#dc2626'}">${t.ma50_signal}</div>` : ''}
-        </div>` : ''}
-        ${t.ma200 != null ? `<div>
-          <div class="form-label">MA 200d</div>
-          <strong>$${t.ma200}</strong>
-          ${t.ma200_signal ? `<div style="font-size:.75rem;margin-top:2px;color:${t.ma200_signal.includes('Bullish') ? '#16a34a' : '#dc2626'}">${t.ma200_signal}</div>` : ''}
-        </div>` : ''}
+        ${t.ma50 != null ? `<div><div class="form-label">MA 50d</div><strong>$${t.ma50}</strong></div>` : ''}
+        ${t.ma200 != null ? `<div><div class="form-label">MA 200d</div><strong>$${t.ma200}</strong></div>` : ''}
       </div>
     </div>` : ''}
     ${Object.values(f).some(v => v != null) ? `
