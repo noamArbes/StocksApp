@@ -83,17 +83,27 @@ _REC_COLORS = {
 
 
 def get_analyst_data(ticker: str, current_price: float) -> dict | None:
-    """Fetch analyst recommendation and price target for a US ticker."""
-    rec_data = _finnhub_get("/stock/recommendation", {"symbol": ticker})
-    target_data = _finnhub_get("/stock/price-target", {"symbol": ticker})
-    if not rec_data:
+    """Fetch analyst recommendation and price target using Yahoo Finance (no API key needed)."""
+    try:
+        import yfinance as yf
+        t = yf.Ticker(ticker)
+        rec_df = t.recommendations
+        targets = t.analyst_price_targets or {}
+    except Exception as e:
+        print(f"[WARN] Yahoo analyst data failed for {ticker}: {e}")
         return None
-    # target_data may be empty — that's OK, just means no price target
 
-    if isinstance(rec_data, list):
-        rec_data = rec_data[0] if rec_data else {}
+    if rec_df is None or rec_df.empty:
+        return None
 
-    counts = {k: rec_data.get(k, 0) for k in ("strongBuy", "buy", "hold", "sell", "strongSell")}
+    row = rec_df.iloc[0]
+    counts = {
+        "strongBuy":  int(row.get("strongBuy", 0)),
+        "buy":        int(row.get("buy", 0)),
+        "hold":       int(row.get("hold", 0)),
+        "sell":       int(row.get("sell", 0)),
+        "strongSell": int(row.get("strongSell", 0)),
+    }
     total = sum(counts.values())
     if total == 0:
         return None
@@ -117,7 +127,7 @@ def get_analyst_data(ticker: str, current_price: float) -> dict | None:
     else:
         rec_key = "strongSell"
 
-    target_mean = target_data.get("targetMean")
+    target_mean = targets.get("mean")
     upside_pct = None
     if target_mean and current_price:
         upside_pct = round((target_mean - current_price) / current_price * 100, 1)
@@ -125,9 +135,9 @@ def get_analyst_data(ticker: str, current_price: float) -> dict | None:
     return {
         "recommendation": _REC_LABELS[rec_key],
         "color": _REC_COLORS[_REC_LABELS[rec_key]],
-        "target_mean": target_mean,
-        "target_high": target_data.get("targetHigh"),
-        "target_low": target_data.get("targetLow"),
+        "target_mean": round(target_mean, 2) if target_mean else None,
+        "target_high": targets.get("high"),
+        "target_low": targets.get("low"),
         "upside_pct": upside_pct,
         "num_analysts": total,
         "counts": counts,

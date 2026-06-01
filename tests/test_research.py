@@ -34,10 +34,13 @@ def test_finnhub_quote_returns_none_on_empty():
 
 
 def test_get_analyst_data_maps_recommendation():
-    mock_rec = {"buy": 10, "hold": 5, "sell": 2, "strongBuy": 8, "strongSell": 1}
-    mock_target = {"targetMean": 180.0, "targetHigh": 200.0, "targetLow": 160.0}
-    with patch("research._finnhub_get") as mock_get:
-        mock_get.side_effect = [mock_rec, mock_target]
+    import pandas as pd
+    mock_df = pd.DataFrame([{"strongBuy": 8, "buy": 10, "hold": 5, "sell": 2, "strongSell": 1}])
+    mock_targets = {"mean": 180.0, "high": 200.0, "low": 160.0, "current": 175.0, "median": 178.0}
+    mock_ticker = MagicMock()
+    mock_ticker.recommendations = mock_df
+    mock_ticker.analyst_price_targets = mock_targets
+    with patch("yfinance.Ticker", return_value=mock_ticker):
         result = research.get_analyst_data("AAPL", current_price=150.0)
     assert result["recommendation"] == "Strong Buy"
     assert result["target_mean"] == 180.0
@@ -46,8 +49,10 @@ def test_get_analyst_data_maps_recommendation():
 
 
 def test_get_analyst_data_returns_none_on_empty():
-    with patch("research._finnhub_get") as mock_get:
-        mock_get.return_value = {}
+    mock_ticker = MagicMock()
+    mock_ticker.recommendations = None
+    mock_ticker.analyst_price_targets = {}
+    with patch("yfinance.Ticker", return_value=mock_ticker):
         result = research.get_analyst_data("AAPL", current_price=150.0)
     assert result is None
 
@@ -82,14 +87,17 @@ def test_get_news_returns_sentiment_tagged_headlines():
     assert "url" in result[0]
 
 
-def test_get_analyst_data_handles_list_response():
-    mock_rec = [{"buy": 10, "hold": 5, "sell": 2, "strongBuy": 8, "strongSell": 1, "period": "2024-01-01"}]
-    mock_target = {"targetMean": 180.0, "targetHigh": 200.0, "targetLow": 160.0}
-    with patch("research._finnhub_get") as mock_get:
-        mock_get.side_effect = [mock_rec, mock_target]
+def test_get_analyst_data_handles_valid_data():
+    import pandas as pd
+    mock_df = pd.DataFrame([{"strongBuy": 5, "buy": 8, "hold": 10, "sell": 3, "strongSell": 0}])
+    mock_ticker = MagicMock()
+    mock_ticker.recommendations = mock_df
+    mock_ticker.analyst_price_targets = {"mean": 200.0, "high": 220.0, "low": 180.0}
+    with patch("yfinance.Ticker", return_value=mock_ticker):
         result = research.get_analyst_data("AAPL", current_price=150.0)
     assert result is not None
     assert result["recommendation"] in ("Strong Buy", "Buy", "Hold", "Sell", "Strong Sell")
+    assert result["num_analysts"] == 26
 
 
 def test_get_technicals_returns_expected_keys():
