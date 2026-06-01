@@ -1232,7 +1232,8 @@ def research_find_tickers():
     limit = 10
     results = research.find_tickers(
         market=market, security_type=security_type, sector=sector,
-        momentum=momentum, market_cap=market_cap, limit=offset + limit
+        momentum=momentum, market_cap=market_cap, limit=offset + limit,
+        tase_cache=_tase_cache,
     )
     sorted_results = research.sort_ticker_results(results, sort_by)
     page = sorted_results[offset:offset + limit]

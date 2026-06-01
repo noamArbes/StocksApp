@@ -149,24 +149,15 @@ def test_get_ai_summary_returns_string():
 
 
 def test_find_tickers_filters_by_market_us():
-    mock_search = {"result": [
-        {"symbol": "AAPL", "description": "Apple Inc", "type": "Common Stock"},
-        {"symbol": "MSFT", "description": "Microsoft", "type": "Common Stock"},
-    ]}
     mock_quote = {"c": 150.0, "h": 155.0, "l": 148.0, "pc": 149.0, "dp": 0.67,
                   "52WeekHigh": 180.0, "52WeekLow": 120.0}
+    # No sector filter → uses _DEFAULT_TICKERS (20 tickers). Mock enough calls for 2 results.
+    # Per ticker: get_quote (1 call), get_analyst_data rec (1 call, empty→None), get_company_profile (1 call)
     with patch("research._finnhub_get") as mock_get:
-        mock_get.side_effect = [
-            mock_search,    # /search
-            mock_quote,     # get_quote AAPL
-            {},             # get_analyst_data rec (empty → returns None after 1 call)
-            {},             # get_company_profile AAPL
-            mock_quote,     # get_quote MSFT
-            {},             # get_analyst_data rec (empty → returns None after 1 call)
-            {},             # get_company_profile MSFT
-        ]
-        results = research.find_tickers(market="us", security_type="stock", sector=None,
-                                        momentum=None, market_cap=None, limit=10)
+        # Return a valid quote for first 2 tickers, then {} for the rest
+        mock_get.side_effect = [mock_quote, {}, {}] * 2 + [{}] * 100
+        results = research.find_tickers(market="us", security_type=None, sector=None,
+                                        momentum=None, market_cap=None, limit=2)
     assert len(results) > 0
     assert all("ticker" in r for r in results)
 
@@ -205,21 +196,15 @@ def test_save_and_load_preset(tmp_path):
 
 
 def test_find_tickers_momentum_filters_negative_change():
-    mock_search = {"result": [
-        {"symbol": "AAPL", "description": "Apple Inc", "type": "Common Stock"},
-    ]}
     mock_quote_negative = {"c": 150.0, "h": 155.0, "l": 148.0, "pc": 151.0, "dp": -0.66,
                            "52WeekHigh": 180.0, "52WeekLow": 120.0}
     with patch("research._finnhub_get") as mock_get:
-        mock_get.side_effect = [
-            mock_search,
-            mock_quote_negative,  # get_quote: negative change
-            {},                   # get_analyst_data: /stock/recommendation (empty → None)
-            {},                   # get_analyst_data: /stock/price-target
-            {},                   # get_company_profile AAPL
-        ]
-        results = research.find_tickers(market="us", security_type=None, sector=None,
-                                        momentum="1d", market_cap=None, limit=10)
+        # All tickers get a negative quote → all filtered out by momentum
+        mock_get.side_effect = [mock_quote_negative] * 100
+        # Patch _get_us_candidates to return only AAPL so test is deterministic
+        with patch("research._get_us_candidates", return_value=["AAPL"]):
+            results = research.find_tickers(market="us", security_type=None, sector=None,
+                                            momentum="1d", market_cap=None, limit=10)
     assert len(results) == 0  # filtered out due to negative momentum
 
 

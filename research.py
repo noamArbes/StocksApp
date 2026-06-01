@@ -278,58 +278,109 @@ _MARKET_CAP_RANGES = {
     "large": (10_000, float("inf")),
 }
 
+# Curated ticker lists by sector — avoids spamming Finnhub search + per-ticker calls
+_SECTOR_TICKERS: dict[str, list[str]] = {
+    "Technology":   ["AAPL", "MSFT", "NVDA", "GOOGL", "META", "AVGO", "AMD", "ORCL", "CRM", "INTC",
+                     "ADBE", "QCOM", "TXN", "AMAT", "MU", "NOW", "PANW", "SNPS", "KLAC", "LRCX"],
+    "Healthcare":   ["UNH", "JNJ", "LLY", "ABBV", "MRK", "TMO", "ABT", "DHR", "ISRG", "PFE",
+                     "AMGN", "BSX", "SYK", "GILD", "REGN", "VRTX", "MDT", "CI", "HCA", "ZTS"],
+    "Finance":      ["BRK-B", "JPM", "V", "MA", "BAC", "WFC", "GS", "MS", "BLK", "AXP",
+                     "SPGI", "C", "USB", "PGR", "TFC", "MCO", "ICE", "COF", "CME", "AON"],
+    "Energy":       ["XOM", "CVX", "COP", "EOG", "SLB", "MPC", "PSX", "VLO", "WMB", "OXY",
+                     "PXD", "DVN", "HES", "BKR", "HAL", "FANG", "MRO", "APA", "CTRA", "OVV"],
+    "Consumer":     ["AMZN", "TSLA", "HD", "MCD", "NKE", "SBUX", "TGT", "LOW", "TJX", "BKNG",
+                     "MAR", "HLT", "YUM", "DPZ", "ROST", "DLTR", "ORLY", "AZO", "BBY", "GPS"],
+    "Industrials":  ["CAT", "DE", "UPS", "HON", "RTX", "GE", "LMT", "BA", "UNP", "CSX",
+                     "NSC", "FDX", "EMR", "ETN", "PH", "ROK", "ITW", "GD", "NOC", "HWM"],
+    "Real Estate":  ["PLD", "AMT", "EQIX", "CCI", "PSA", "O", "WELL", "DLR", "AVB", "EQR",
+                     "SPG", "VICI", "WY", "ARE", "MAA", "UDR", "ESS", "NNN", "FR", "KIM"],
+    "Utilities":    ["NEE", "DUK", "SO", "D", "AEP", "SRE", "EXC", "XEL", "WEC", "ES",
+                     "ETR", "FE", "AES", "CMS", "NI", "DTE", "PPL", "EVRG", "POR", "OGE"],
+}
+
+_ETF_TICKERS = ["SPY", "QQQ", "IWM", "VTI", "VOO", "VEA", "VWO", "GLD", "TLT", "IEF",
+                "XLK", "XLF", "XLE", "XLV", "XLI", "XLY", "XLRE", "XLU", "XLC", "XLB",
+                "ARKK", "ARKQ", "VNQ", "AGG", "BND", "LQD", "HYG", "EMB", "IAU", "SLV"]
+
+_DEFAULT_TICKERS = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "BRK-B", "JPM",
+                    "TSLA", "V", "UNH", "XOM", "JNJ", "LLY", "MA", "AVGO", "HD", "MRK",
+                    "PG", "ABBV"]
+
+
+def _get_us_candidates(security_type: str | None, sector: str | None) -> list[str]:
+    """Return a curated list of tickers to evaluate based on filters."""
+    if security_type == "etf":
+        return _ETF_TICKERS
+    if sector and sector in _SECTOR_TICKERS:
+        return _SECTOR_TICKERS[sector]
+    if sector:
+        # Unknown sector — fall back to default
+        return _DEFAULT_TICKERS
+    # No sector filter — return all sectors interleaved
+    all_tickers = []
+    for tickers in _SECTOR_TICKERS.values():
+        all_tickers.extend(tickers[:5])  # top 5 per sector
+    return all_tickers or _DEFAULT_TICKERS
+
+
+def _get_israel_candidates(security_type: str | None, sector: str | None,
+                           tase_cache: list[dict]) -> list[dict]:
+    """Return TASE securities matching filters. Each item has id, name, ticker, type."""
+    results = []
+    for item in tase_cache:
+        if security_type == "stock" and item.get("type") != "security":
+            continue
+        if security_type in ("etf", "fund") and item.get("type") != "fund":
+            continue
+        results.append(item)
+    return results[:60]
+
 
 def find_tickers(market: str, security_type: str | None, sector: str | None,
-                 momentum: str | None, market_cap: str | None, limit: int = 10) -> list[dict]:
+                 momentum: str | None, market_cap: str | None, limit: int = 10,
+                 tase_cache: list | None = None) -> list[dict]:
     """
     Search for tickers matching the given filters.
     market: 'us' or 'israel'
     security_type: 'stock', 'etf', 'fund', or None
-    sector: sector string or None
+    sector: sector string or None (US only)
     momentum: '1d', '1w', '1m', or None
-    market_cap: 'small', 'mid', 'large', or None
+    market_cap: 'small', 'mid', 'large', or None (US only)
+    tase_cache: pass loaded TASE cache for israel market
     Returns list of dicts with ticker, name, recommendation, target_mean, upside_pct, num_analysts, price, change_pct.
     """
     if market == "israel":
-        return []
+        return _find_tickers_israel(security_type, tase_cache or [], limit)
 
-    query = sector or security_type or "S&P 500"
-    raw = _finnhub_get("/search", {"q": query})
-    candidates = raw.get("result", []) if isinstance(raw, dict) else []
-
+    candidates = _get_us_candidates(security_type, sector)
     results = []
-    for item in candidates[:50]:
-        ticker = item.get("symbol", "")
-        if not ticker or "." in ticker:
-            continue
 
-        item_type = item.get("type", "").lower()
-        if security_type == "stock" and item_type not in ("common stock", ""):
-            continue
-        if security_type == "etf" and "etf" not in item_type:
-            continue
+    for ticker in candidates:
+        if len(results) >= limit * 2:
+            break
 
         quote = get_quote(ticker)
         if not quote:
             continue
 
+        # Momentum filter: only keep tickers with positive today's change
+        if momentum and (quote.get("change_pct") or 0) <= 0:
+            continue
+
         analyst = get_analyst_data(ticker, quote["price"])
         profile = get_company_profile(ticker)
 
+        # Market cap filter
         if market_cap and profile:
             cap = profile.get("market_cap") or 0
             lo, hi = _MARKET_CAP_RANGES.get(market_cap, (0, float("inf")))
             if not (lo <= cap < hi):
                 continue
 
-        # Momentum filter: only keep tickers with positive today's change
-        if momentum and (quote.get("change_pct") or 0) <= 0:
-            continue
-
         results.append({
             "ticker": ticker,
             "name": profile.get("name", ticker) if profile else ticker,
-            "sector": profile.get("sector") if profile else None,
+            "sector": profile.get("sector") if profile else sector,
             "recommendation": analyst.get("recommendation") if analyst else None,
             "color": analyst.get("color") if analyst else "gray",
             "target_mean": analyst.get("target_mean") if analyst else None,
@@ -339,9 +390,36 @@ def find_tickers(market: str, security_type: str | None, sector: str | None,
             "change_pct": quote["change_pct"],
         })
 
+    return results
+
+
+def _find_tickers_israel(security_type: str | None, tase_cache: list[dict],
+                         limit: int) -> list[dict]:
+    """Find Israeli securities using the TASE cache + live prices."""
+    import tase as tase_module
+    candidates = _get_israel_candidates(security_type, None, tase_cache)
+    results = []
+    for item in candidates:
         if len(results) >= limit * 2:
             break
-
+        try:
+            price = tase_module.get_price(item["id"], item["type"])
+        except Exception:
+            continue
+        if not price:
+            continue
+        results.append({
+            "ticker": item.get("ticker") or item["id"],
+            "name": item.get("name", ""),
+            "sector": None,
+            "recommendation": None,
+            "color": "gray",
+            "target_mean": None,
+            "upside_pct": None,
+            "num_analysts": 0,
+            "price": price,
+            "change_pct": None,
+        })
     return results
 
 
