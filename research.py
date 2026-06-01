@@ -29,19 +29,40 @@ def is_tase_ticker(ticker: str) -> bool:
 
 
 def get_quote(ticker: str) -> dict | None:
-    """Fetch current price data for a US ticker. Returns None on failure."""
+    """Fetch current price data for a US ticker.
+    Tries Finnhub first; falls back to yfinance if Finnhub fails or key is missing."""
     data = _finnhub_get("/quote", {"symbol": ticker})
-    if not data or data.get("c") in (None, 0):
+    if data and data.get("c") not in (None, 0):
+        return {
+            "price": data.get("c"),
+            "prev_close": data.get("pc"),
+            "day_high": data.get("h"),
+            "day_low": data.get("l"),
+            "change_pct": data.get("dp"),
+            "week52_high": data.get("52WeekHigh"),
+            "week52_low": data.get("52WeekLow"),
+        }
+    # Fallback: yfinance (no API key required)
+    try:
+        import yfinance as yf
+        info = yf.Ticker(ticker).fast_info
+        price = info.last_price
+        prev = info.previous_close
+        if not price:
+            return None
+        change_pct = round((price - prev) / prev * 100, 2) if prev else None
+        return {
+            "price": round(price, 2),
+            "prev_close": round(prev, 2) if prev else None,
+            "day_high": round(info.day_high, 2) if info.day_high else None,
+            "day_low": round(info.day_low, 2) if info.day_low else None,
+            "change_pct": change_pct,
+            "week52_high": round(info.fifty_two_week_high, 2) if info.fifty_two_week_high else None,
+            "week52_low": round(info.fifty_two_week_low, 2) if info.fifty_two_week_low else None,
+        }
+    except Exception as e:
+        print(f"[WARN] yfinance quote fallback failed for {ticker}: {e}")
         return None
-    return {
-        "price": data.get("c"),
-        "prev_close": data.get("pc"),
-        "day_high": data.get("h"),
-        "day_low": data.get("l"),
-        "change_pct": data.get("dp"),
-        "week52_high": data.get("52WeekHigh"),
-        "week52_low": data.get("52WeekLow"),
-    }
 
 
 _REC_LABELS = {
