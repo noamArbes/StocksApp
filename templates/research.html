@@ -302,6 +302,7 @@ function buildAnalysis(ticker, d) {
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:8px">
         <div><div class="form-label">Price</div><strong>$${q.price}</strong> <span class="${changeClass}">${q.change_pct != null ? (q.change_pct > 0 ? '+' : '') + q.change_pct.toFixed(2) + '%' : ''}</span></div>
         <div><div class="form-label">Day Range</div>${q.day_low} – ${q.day_high}</div>
+        ${q.cap_size ? `<div><div class="form-label">Market Cap</div><strong>${q.cap_size}</strong></div>` : ''}
       </div>
     </div>
     ${a.recommendation ? `
@@ -317,11 +318,27 @@ function buildAnalysis(ticker, d) {
     ${Object.values(t).some(v => v != null) ? `
     <div class="card" style="margin-bottom:12px">
       <h3>Technical Indicators</h3>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:8px">
-        ${t.rsi != null ? `<div><div class="form-label">RSI (14)</div><strong>${t.rsi}</strong></div>` : ''}
-        ${t.macd != null ? `<div><div class="form-label">MACD</div><strong>${t.macd}</strong></div>` : ''}
-        ${t.ma50 != null ? `<div><div class="form-label">MA 50d</div><strong>$${t.ma50}</strong></div>` : ''}
-        ${t.ma200 != null ? `<div><div class="form-label">MA 200d</div><strong>$${t.ma200}</strong></div>` : ''}
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-top:8px">
+        ${t.rsi != null ? `<div>
+          <div class="form-label">RSI (14)</div>
+          <strong>${t.rsi}</strong>
+          ${t.rsi_signal ? `<div style="font-size:.75rem;margin-top:2px;color:${t.rsi_signal.includes('bullish') ? '#16a34a' : t.rsi_signal.includes('bearish') ? '#dc2626' : '#888'}">${t.rsi_signal}</div>` : ''}
+        </div>` : ''}
+        ${t.macd != null ? `<div>
+          <div class="form-label">MACD</div>
+          <strong>${t.macd}</strong>
+          ${t.macd_interp ? `<div style="font-size:.75rem;margin-top:2px;color:${t.macd_interp === 'Bullish' ? '#16a34a' : '#dc2626'}">${t.macd_interp}</div>` : ''}
+        </div>` : ''}
+        ${t.ma50 != null ? `<div>
+          <div class="form-label">MA 50d</div>
+          <strong>$${t.ma50}</strong>
+          ${t.ma50_signal ? `<div style="font-size:.75rem;margin-top:2px;color:${t.ma50_signal.includes('Bullish') ? '#16a34a' : '#dc2626'}">${t.ma50_signal}</div>` : ''}
+        </div>` : ''}
+        ${t.ma200 != null ? `<div>
+          <div class="form-label">MA 200d</div>
+          <strong>$${t.ma200}</strong>
+          ${t.ma200_signal ? `<div style="font-size:.75rem;margin-top:2px;color:${t.ma200_signal.includes('Bullish') ? '#16a34a' : '#dc2626'}">${t.ma200_signal}</div>` : ''}
+        </div>` : ''}
       </div>
     </div>` : ''}
     ${Object.values(f).some(v => v != null) ? `

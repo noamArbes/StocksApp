@@ -51,6 +51,15 @@ def get_quote(ticker: str) -> dict | None:
         if not price:
             return None
         change_pct = round((price - prev) / prev * 100, 2) if prev else None
+        market_cap = info.market_cap
+        cap_size = None
+        if market_cap:
+            if market_cap >= 10_000_000_000:
+                cap_size = "Large Cap"
+            elif market_cap >= 2_000_000_000:
+                cap_size = "Mid Cap"
+            else:
+                cap_size = "Small Cap"
         return {
             "price": round(price, 2),
             "prev_close": round(prev, 2) if prev else None,
@@ -59,6 +68,8 @@ def get_quote(ticker: str) -> dict | None:
             "change_pct": change_pct,
             "week52_high": round(info.year_high, 2) if info.year_high else None,
             "week52_low": round(info.year_low, 2) if info.year_low else None,
+            "market_cap": market_cap,
+            "cap_size": cap_size,
         }
     except Exception as e:
         print(f"[WARN] yfinance quote fallback failed for {ticker}: {e}")
@@ -236,12 +247,42 @@ def get_technicals(ticker: str) -> dict | None:
     macd, macd_signal = _calc_macd(closes)
     ma50 = round(float(closes.tail(50).mean()), 2) if len(closes) >= 50 else None
     ma200 = round(float(closes.tail(200).mean()), 2) if len(closes) >= 200 else None
+    current_price = round(float(closes.iloc[-1]), 2)
+
+    # Signal interpretation
+    if rsi is not None:
+        if rsi >= 70:
+            rsi_signal = "Overbought — bearish"
+        elif rsi <= 30:
+            rsi_signal = "Oversold — bullish"
+        else:
+            rsi_signal = "Neutral"
+    else:
+        rsi_signal = None
+
+    if macd is not None and macd_signal is not None:
+        macd_interp = "Bullish" if macd > macd_signal else "Bearish"
+    else:
+        macd_interp = None
+
+    ma50_signal = None
+    if ma50 is not None:
+        ma50_signal = "Bullish — price above MA50" if current_price >= ma50 else "Bearish — price below MA50"
+
+    ma200_signal = None
+    if ma200 is not None:
+        ma200_signal = "Bullish — price above MA200" if current_price >= ma200 else "Bearish — price below MA200"
+
     return {
         "rsi": rsi,
+        "rsi_signal": rsi_signal,
         "macd": macd,
         "macd_signal": macd_signal,
+        "macd_interp": macd_interp,
         "ma50": ma50,
+        "ma50_signal": ma50_signal,
         "ma200": ma200,
+        "ma200_signal": ma200_signal,
     }
 
 
