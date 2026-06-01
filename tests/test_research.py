@@ -27,9 +27,13 @@ def test_finnhub_quote_returns_expected_keys():
 
 
 def test_finnhub_quote_returns_none_on_empty():
-    with patch("research._finnhub_get") as mock_get:
-        mock_get.return_value = {}
-        result = research.get_quote("AAPL")
+    mock_fast_info = MagicMock()
+    mock_fast_info.last_price = None
+    mock_ticker = MagicMock()
+    mock_ticker.fast_info = mock_fast_info
+    with patch("research._finnhub_get", return_value={}):
+        with patch("yfinance.Ticker", return_value=mock_ticker):
+            result = research.get_quote("AAPL")
     assert result is None
 
 
