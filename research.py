@@ -311,16 +311,25 @@ _MARKET_CAP_RANGES = {
     "large":  (10_000_000_000, float("inf")),
 }
 
-# Yahoo Finance sector names map
-_YF_SECTOR_MAP = {
-    "Technology":  "Technology",
-    "Healthcare":  "Healthcare",
-    "Finance":     "Financial Services",
-    "Energy":      "Energy",
-    "Consumer":    "Consumer Cyclical",
-    "Industrials": "Industrials",
-    "Real Estate": "Real Estate",
-    "Utilities":   "Utilities",
+# Yahoo Finance sector/industry filter map
+# Value is (field, yahoo_value) — field is either "sector" or "industry"
+_YF_SECTOR_MAP: dict[str, tuple[str, str]] = {
+    # Broad sectors
+    "Technology":      ("sector",   "Technology"),
+    "Healthcare":      ("sector",   "Healthcare"),
+    "Finance":         ("sector",   "Financial Services"),
+    "Energy":          ("sector",   "Energy"),
+    "Consumer":        ("sector",   "Consumer Cyclical"),
+    "Industrials":     ("sector",   "Industrials"),
+    "Real Estate":     ("sector",   "Real Estate"),
+    "Utilities":       ("sector",   "Utilities"),
+    # Technology sub-categories
+    "Semiconductors":  ("industry", "Semiconductors"),
+    "Software":        ("industry", "Software—Application"),
+    "Cloud & SaaS":    ("industry", "Software—Infrastructure"),
+    "Cybersecurity":   ("industry", "Software—Infrastructure"),
+    # Other industries
+    "Aerospace":       ("industry", "Aerospace & Defense"),
 }
 
 
@@ -336,7 +345,8 @@ def _screen_yahoo(security_type: str | None, sector: str | None,
     clauses.append(EquityQuery("is-in", ["exchange", "NMS", "NYQ"]))
 
     if sector and sector in _YF_SECTOR_MAP:
-        clauses.append(EquityQuery("eq", ["sector", _YF_SECTOR_MAP[sector]]))
+        field, value = _YF_SECTOR_MAP[sector]
+        clauses.append(EquityQuery("eq", [field, value]))
 
     if market_cap and market_cap in _MARKET_CAP_RANGES:
         lo, hi = _MARKET_CAP_RANGES[market_cap]
