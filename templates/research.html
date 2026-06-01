@@ -1,10 +1,16 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="toolbar">
-  <h2>Research</h2>
+
+{# ── Main app tab bar ── #}
+<div class="tab-bar">
+    <a href="{{ url_for('dashboard') }}" class="tab">Alarms</a>
+    <a href="{{ url_for('dashboard', tab='history') }}" class="tab">Trade History</a>
+    <a href="{{ url_for('savings') }}" class="tab">Savings</a>
+    <a href="{{ url_for('research_tab') }}" class="tab tab-active">Research</a>
 </div>
 
-<div class="tab-bar">
+{# ── Research sub-tabs ── #}
+<div class="tab-bar" style="margin-top:8px">
   <button class="tab tab-active" id="tab-find" onclick="switchTab('find')">Find Tickers</button>
   <button class="tab" id="tab-analyze" onclick="switchTab('analyze')">Analyze Stock</button>
 </div>
