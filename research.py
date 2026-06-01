@@ -291,25 +291,20 @@ _YF_SECTOR_MAP = {
 }
 
 
-def _get_us_candidates(security_type: str | None, sector: str | None,
-                       market_cap: str | None = None, limit: int = 40) -> list[str]:
+def _screen_yahoo(security_type: str | None, sector: str | None,
+                  market_cap: str | None, limit: int) -> list[dict]:
     """
-    Use Yahoo Finance EquityQuery screener to discover tickers dynamically.
-    Returns a list of ticker symbols matching the given filters.
-    Falls back to an empty list on failure (caller handles gracefully).
+    Run Yahoo Finance screener and return raw quote dicts (already contain price/name/sector).
+    Falls back to a broad screen on failure.
     """
     from yfinance import EquityQuery, screen
 
     clauses: list = []
-
-    # Exchange: US (NASDAQ + NYSE)
     clauses.append(EquityQuery("is-in", ["exchange", "NMS", "NYQ"]))
 
-    # Sector filter
     if sector and sector in _YF_SECTOR_MAP:
         clauses.append(EquityQuery("eq", ["sector", _YF_SECTOR_MAP[sector]]))
 
-    # Market cap filter — Yahoo Finance uses raw dollar amounts
     if market_cap and market_cap in _MARKET_CAP_RANGES:
         lo, hi = _MARKET_CAP_RANGES[market_cap]
         if lo > 0:
@@ -321,16 +316,13 @@ def _get_us_candidates(security_type: str | None, sector: str | None,
 
     try:
         result = screen(query, sortField="percentchange", sortAsc=False, size=limit)
-        quotes = result.get("quotes", [])
-        return [q["symbol"] for q in quotes if q.get("symbol") and "." not in q["symbol"]]
+        return [q for q in result.get("quotes", []) if q.get("symbol") and "." not in q["symbol"]]
     except Exception as e:
         print(f"[WARN] Yahoo Finance screener failed: {e}")
-        # Graceful fallback: broad US equity screen
         try:
-            fallback_query = EquityQuery("is-in", ["exchange", "NMS", "NYQ"])
-            result = screen(fallback_query, sortField="percentchange", sortAsc=False, size=limit)
-            quotes = result.get("quotes", [])
-            return [q["symbol"] for q in quotes if q.get("symbol") and "." not in q["symbol"]]
+            fallback = EquityQuery("is-in", ["exchange", "NMS", "NYQ"])
+            result = screen(fallback, sortField="percentchange", sortAsc=False, size=limit)
+            return [q for q in result.get("quotes", []) if q.get("symbol") and "." not in q["symbol"]]
         except Exception:
             return []
 
@@ -364,36 +356,39 @@ def find_tickers(market: str, security_type: str | None, sector: str | None,
     if market == "israel":
         return _find_tickers_israel(security_type, tase_cache or [], limit)
 
-    # Yahoo Finance screener fetches a fresh, diverse candidate pool
-    candidates = _get_us_candidates(security_type, sector, market_cap, limit=limit * 3)
+    # Yahoo screener returns price/name/sector — no extra API calls needed for basic data
+    yf_quotes = _screen_yahoo(security_type, sector, market_cap, limit=limit * 3)
     results = []
 
-    for ticker in candidates:
+    for yq in yf_quotes:
         if len(results) >= limit * 2:
             break
 
-        quote = get_quote(ticker)
-        if not quote:
+        ticker = yq["symbol"]
+        price = yq.get("regularMarketPrice") or yq.get("ask") or 0
+        change_pct = yq.get("regularMarketChangePercent")
+
+        if not price:
             continue
 
         # Momentum filter: only keep tickers with positive today's change
-        if momentum and (quote.get("change_pct") or 0) <= 0:
+        if momentum and (change_pct or 0) <= 0:
             continue
 
-        analyst = get_analyst_data(ticker, quote["price"])
-        profile = get_company_profile(ticker)
+        # Analyst data — single Finnhub call (rec + target = 2 calls)
+        analyst = get_analyst_data(ticker, price)
 
         results.append({
             "ticker": ticker,
-            "name": profile.get("name", ticker) if profile else ticker,
-            "sector": profile.get("sector") if profile else sector,
+            "name": yq.get("shortName") or yq.get("longName") or ticker,
+            "sector": yq.get("sector") or sector,
             "recommendation": analyst.get("recommendation") if analyst else None,
             "color": analyst.get("color") if analyst else "gray",
             "target_mean": analyst.get("target_mean") if analyst else None,
             "upside_pct": analyst.get("upside_pct") if analyst else None,
             "num_analysts": analyst.get("num_analysts") if analyst else 0,
-            "price": quote["price"],
-            "change_pct": quote["change_pct"],
+            "price": price,
+            "change_pct": change_pct,
         })
 
     return results

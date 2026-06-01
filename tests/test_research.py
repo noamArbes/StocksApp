@@ -149,17 +149,20 @@ def test_get_ai_summary_returns_string():
 
 
 def test_find_tickers_filters_by_market_us():
-    mock_quote = {"c": 150.0, "h": 155.0, "l": 148.0, "pc": 149.0, "dp": 0.67,
-                  "52WeekHigh": 180.0, "52WeekLow": 120.0}
-    # No sector filter → uses _DEFAULT_TICKERS (20 tickers). Mock enough calls for 2 results.
-    # Per ticker: get_quote (1 call), get_analyst_data rec (1 call, empty→None), get_company_profile (1 call)
-    with patch("research._finnhub_get") as mock_get:
-        # Return a valid quote for first 2 tickers, then {} for the rest
-        mock_get.side_effect = [mock_quote, {}, {}] * 2 + [{}] * 100
-        results = research.find_tickers(market="us", security_type=None, sector=None,
-                                        momentum=None, market_cap=None, limit=2)
-    assert len(results) > 0
+    mock_yf_quotes = [
+        {"symbol": "AAPL", "shortName": "Apple Inc", "sector": "Technology",
+         "regularMarketPrice": 150.0, "regularMarketChangePercent": 0.67},
+        {"symbol": "MSFT", "shortName": "Microsoft", "sector": "Technology",
+         "regularMarketPrice": 300.0, "regularMarketChangePercent": 0.5},
+    ]
+    with patch("research._screen_yahoo", return_value=mock_yf_quotes):
+        with patch("research._finnhub_get", return_value={}):
+            results = research.find_tickers(market="us", security_type=None, sector=None,
+                                            momentum=None, market_cap=None, limit=10)
+    assert len(results) == 2
     assert all("ticker" in r for r in results)
+    assert results[0]["ticker"] == "AAPL"
+    assert results[0]["price"] == 150.0
 
 
 def test_sort_ticker_results_by_upside():
@@ -196,15 +199,13 @@ def test_save_and_load_preset(tmp_path):
 
 
 def test_find_tickers_momentum_filters_negative_change():
-    mock_quote_negative = {"c": 150.0, "h": 155.0, "l": 148.0, "pc": 151.0, "dp": -0.66,
-                           "52WeekHigh": 180.0, "52WeekLow": 120.0}
-    with patch("research._finnhub_get") as mock_get:
-        # All tickers get a negative quote → all filtered out by momentum
-        mock_get.side_effect = [mock_quote_negative] * 100
-        # Patch _get_us_candidates to return only AAPL so test is deterministic
-        with patch("research._get_us_candidates", return_value=["AAPL"]):
-            results = research.find_tickers(market="us", security_type=None, sector=None,
-                                            momentum="1d", market_cap=None, limit=10)
+    mock_yf_quotes = [
+        {"symbol": "AAPL", "shortName": "Apple Inc", "sector": "Technology",
+         "regularMarketPrice": 150.0, "regularMarketChangePercent": -0.66},
+    ]
+    with patch("research._screen_yahoo", return_value=mock_yf_quotes):
+        results = research.find_tickers(market="us", security_type=None, sector=None,
+                                        momentum="1d", market_cap=None, limit=10)
     assert len(results) == 0  # filtered out due to negative momentum
 
 
