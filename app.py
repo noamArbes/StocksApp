@@ -16,6 +16,7 @@ import checker
 import cities_data
 import tase
 import research
+import trump_watcher
 
 # --- Startup validation ---
 _UI_PASSWORD = os.environ.get("UI_PASSWORD")
@@ -1267,6 +1268,7 @@ if __name__ == "__main__":
     from apscheduler.schedulers.background import BackgroundScheduler
     scheduler = BackgroundScheduler()
     scheduler.add_job(checker.run, "interval", minutes=15, kwargs={"path": _ALARMS_PATH})
+    scheduler.add_job(trump_watcher.run, "interval", minutes=60, id="trump_watcher")
     scheduler.start()
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
