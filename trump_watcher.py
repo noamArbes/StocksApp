@@ -2,6 +2,8 @@ import json
 import os
 import re
 import urllib.request
+import tempfile
+import uuid
 from datetime import datetime, timezone, timedelta
 import anthropic
 from checker import send_email
@@ -11,6 +13,7 @@ _TRUMP_ACCOUNT_ID = "107780257626128497"
 _API_URL = f"https://truthsocial.com/api/v1/accounts/{_TRUMP_ACCOUNT_ID}/statuses"
 
 _RECIPIENT = "noamarbes1@gmail.com"
+_ALERTS_MAX = 100
 
 _claude_client = None
 
@@ -48,6 +51,58 @@ If the post should NOT be flagged, respond with exactly: NO_ALERT"""
 
 def _strip_html(text: str) -> str:
     return re.sub(r"<[^>]+>", "", text).strip()
+
+
+def get_alerts_path() -> str:
+    """Returns the path to trump_alerts.json, next to alarms.json."""
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "trump_alerts.json")
+
+
+def parse_alert(raw: str, post: dict) -> dict:
+    """Parse Claude's formatted alert string into a structured dict."""
+    def _extract(label: str) -> str:
+        for line in raw.splitlines():
+            if line.startswith(label):
+                return line[len(label):].strip()
+        return ""
+
+    tickers_raw = _extract("🎯 Tickers Likely Affected:")
+    tickers = [t.strip() for t in tickers_raw.split(",") if t.strip()]
+
+    return {
+        "id": str(uuid.uuid4()),
+        "timestamp": post.get("created_at", ""),
+        "summary": _extract("📝 Post Summary:"),
+        "tickers": tickers,
+        "direction": _extract("📈 Direction:"),
+        "sector": _extract("🏭 Sector:"),
+        "confidence": _extract("⚡ Confidence:"),
+        "why_it_matters": _extract("💡 Why It Matters:"),
+        "raw_post": post.get("content", ""),
+    }
+
+
+def save_alert(alert: dict, path: str | None = None) -> None:
+    """Prepend alert to trump_alerts.json, cap at _ALERTS_MAX entries. Atomic write."""
+    if path is None:
+        path = get_alerts_path()
+    try:
+        with open(path) as f:
+            existing = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        existing = []
+
+    existing.insert(0, alert)
+    existing = existing[:_ALERTS_MAX]
+
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
+    try:
+        with os.fdopen(tmp_fd, "w") as f:
+            json.dump(existing, f, indent=2)
+        os.replace(tmp_path, path)
+    except Exception:
+        os.unlink(tmp_path)
+        raise
 
 
 def fetch_recent_posts(minutes: int = 60) -> list[dict]:

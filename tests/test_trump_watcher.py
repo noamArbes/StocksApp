@@ -2,6 +2,8 @@ import json
 import os
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, MagicMock
+import tempfile
+import pathlib
 import trump_watcher
 
 
@@ -137,3 +139,67 @@ def test_run_does_not_send_email_on_analyze_error():
         trump_watcher.run()
 
     mock_send.assert_not_called()
+
+
+def test_parse_alert_extracts_fields():
+    raw = (
+        "---\n"
+        "🚨 TRUMP TRADE ALERT\n"
+        "📅 Date & Time: 2026-06-03T14:32:00Z\n"
+        "📝 Post Summary: Trump announced massive tariffs on Chinese steel.\n"
+        "🎯 Tickers Likely Affected: X, NUE, STLD\n"
+        "📈 Direction: Bearish\n"
+        "🏭 Sector: Steel / Materials\n"
+        "⚡ Confidence: High\n"
+        "💡 Why It Matters: Tariffs on China steel directly hit domestic steel producers.\n"
+        "---"
+    )
+    post = {"content": "We are putting massive tariffs on China steel!", "created_at": "2026-06-03T14:32:00Z"}
+    result = trump_watcher.parse_alert(raw, post)
+
+    assert result["summary"] == "Trump announced massive tariffs on Chinese steel."
+    assert result["tickers"] == ["X", "NUE", "STLD"]
+    assert result["direction"] == "Bearish"
+    assert result["sector"] == "Steel / Materials"
+    assert result["confidence"] == "High"
+    assert result["why_it_matters"] == "Tariffs on China steel directly hit domestic steel producers."
+    assert result["raw_post"] == "We are putting massive tariffs on China steel!"
+    assert result["timestamp"] == "2026-06-03T14:32:00Z"
+    assert "id" in result
+
+
+def test_save_alert_writes_to_file():
+    alert = {
+        "id": "test-id",
+        "timestamp": "2026-06-03T14:32:00Z",
+        "summary": "Test alert",
+        "tickers": ["AAPL"],
+        "direction": "Bullish",
+        "sector": "Technology",
+        "confidence": "High",
+        "why_it_matters": "Test reason.",
+        "raw_post": "Test post",
+    }
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = str(pathlib.Path(tmpdir) / "trump_alerts.json")
+        trump_watcher.save_alert(alert, path=path)
+        with open(path) as f:
+            data = json.load(f)
+    assert len(data) == 1
+    assert data[0]["id"] == "test-id"
+
+
+def test_save_alert_prepends_and_caps_at_100():
+    alerts = [{"id": str(i), "timestamp": "", "summary": "", "tickers": [],
+                "direction": "", "sector": "", "confidence": "",
+                "why_it_matters": "", "raw_post": ""} for i in range(100)]
+    new_alert = {**alerts[0], "id": "new"}
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = str(pathlib.Path(tmpdir) / "trump_alerts.json")
+        with open(path, "w") as f:
+            json.dump(alerts, f)
+        trump_watcher.save_alert(new_alert, path=path)
+        with open(path) as f:
+            data = json.load(f)
+    assert len(data) == 100
+    assert data[0]["id"] == "new"
