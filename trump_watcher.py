@@ -74,13 +74,19 @@ def analyze_posts(posts: list[dict]) -> list[str]:
             continue
         timestamp = post.get("created_at", "")
         user_msg = f"Post timestamp: {timestamp}\nPost content: {content}"
-        response = _claude_client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=512,
-            system=_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_msg}],
-        )
-        text = response.content[0].text.strip()
+        try:
+            response = _claude_client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=512,
+                system=_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": user_msg}],
+            )
+            if not response.content:
+                continue
+            text = response.content[0].text.strip()
+        except Exception as e:
+            print(f"[TrumpWatcher] Claude API error for post {post.get('id', '?')}: {e}")
+            continue
         if text != "NO_ALERT":
             alerts.append(text)
     return alerts
