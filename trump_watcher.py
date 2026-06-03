@@ -12,7 +12,14 @@ _API_URL = f"https://truthsocial.com/api/v1/accounts/{_TRUMP_ACCOUNT_ID}/statuse
 
 _RECIPIENT = "noamarbes1@gmail.com"
 
-_claude_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+_claude_client = None
+
+
+def _get_claude_client():
+    global _claude_client
+    if _claude_client is None:
+        _claude_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+    return _claude_client
 
 _SYSTEM_PROMPT = """You are a financial analyst monitoring political social media for market-moving content.
 
@@ -76,7 +83,7 @@ def analyze_posts(posts: list[dict]) -> list[str]:
         timestamp = post.get("created_at", "")
         user_msg = f"Post timestamp: {timestamp}\nPost content: {content}"
         try:
-            response = _claude_client.messages.create(
+            response = _get_claude_client().messages.create(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=512,
                 system=_SYSTEM_PROMPT,
@@ -88,7 +95,7 @@ def analyze_posts(posts: list[dict]) -> list[str]:
         except Exception as e:
             print(f"[TrumpWatcher] Claude API error for post {post.get('id', '?')}: {e}")
             continue
-        if text != "NO_ALERT":
+        if text.upper() != "NO_ALERT":
             alerts.append(text)
     return alerts
 

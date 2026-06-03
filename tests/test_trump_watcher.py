@@ -67,9 +67,10 @@ def test_analyze_posts_returns_formatted_alerts():
     )
     mock_message = MagicMock()
     mock_message.content = [MagicMock(text=fake_alert)]
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = mock_message
 
-    with patch("trump_watcher._claude_client") as mock_client:
-        mock_client.messages.create.return_value = mock_message
+    with patch("trump_watcher._get_claude_client", return_value=mock_client):
         alerts = trump_watcher.analyze_posts(posts)
 
     assert len(alerts) == 1
@@ -80,9 +81,10 @@ def test_analyze_posts_returns_empty_for_non_market_post():
     posts = [_make_post(10, "Happy Sunday everyone! God bless America.")]
     mock_message = MagicMock()
     mock_message.content = [MagicMock(text="NO_ALERT")]
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = mock_message
 
-    with patch("trump_watcher._claude_client") as mock_client:
-        mock_client.messages.create.return_value = mock_message
+    with patch("trump_watcher._get_claude_client", return_value=mock_client):
         alerts = trump_watcher.analyze_posts(posts)
 
     assert alerts == []
