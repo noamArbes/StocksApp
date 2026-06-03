@@ -1298,3 +1298,15 @@ def test_savings_works_without_siemens_file(savings_client, tmp_path, monkeypatc
     login(c)
     resp = c.get("/savings")
     assert resp.status_code == 200
+
+
+def test_trump_alerts_route_returns_empty_when_no_file(client):
+    import trump_watcher as _tw
+    from unittest.mock import patch
+    login(client)
+    with patch.object(_tw, "get_alerts_path", return_value="/nonexistent/path/trump_alerts.json"):
+        resp = client.get("/api/trump-alerts")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data == {"alerts": []}
+

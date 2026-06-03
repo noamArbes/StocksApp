@@ -155,7 +155,7 @@ def analyze_posts(posts: list[dict]) -> list[str]:
 
 
 def run() -> None:
-    """Main entry point: fetch, analyze, and email alerts if any posts are flagged."""
+    """Main entry point: fetch, analyze, save, and email alerts if any posts are flagged."""
     api_key = os.environ.get("BREVO_API_KEY")
     sender = os.environ.get("BREVO_SENDER_EMAIL")
     if not api_key or not sender:
@@ -173,17 +173,25 @@ def run() -> None:
         return
 
     try:
-        alerts = analyze_posts(posts)
+        alert_strings = analyze_posts(posts)
     except Exception as e:
         print(f"[TrumpWatcher] Failed to analyze posts: {e}")
         return
 
-    if not alerts:
+    if not alert_strings:
         print("[TrumpWatcher] No posts flagged")
         return
 
-    n = len(alerts)
+    # Save each alert to disk (pair alert string with its source post by index)
+    for raw, post in zip(alert_strings, posts):
+        try:
+            alert = parse_alert(raw, post)
+            save_alert(alert)
+        except Exception as e:
+            print(f"[TrumpWatcher] Failed to save alert: {e}")
+
+    n = len(alert_strings)
     subject = f"🚨 Trump Trade Alert — {n} post{'s' if n > 1 else ''} flagged"
-    body = "\n\n".join(alerts)
+    body = "\n\n".join(alert_strings)
     send_email(subject, body, _RECIPIENT, api_key, sender)
     print(f"[TrumpWatcher] Alert email sent — {n} post(s) flagged")

@@ -1176,6 +1176,19 @@ def research_tab():
     return render_template("research.html")
 
 
+@app.route("/api/trump-alerts")
+@login_required
+def trump_alerts():
+    import trump_watcher as _tw
+    path = _tw.get_alerts_path()
+    try:
+        with open(path) as f:
+            alerts = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        alerts = []
+    return jsonify({"alerts": alerts})
+
+
 @app.route("/api/research/analyze")
 @login_required
 def research_analyze():

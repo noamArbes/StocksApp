@@ -99,6 +99,7 @@ def test_run_sends_email_when_alerts_found():
     with patch("trump_watcher.fetch_recent_posts", return_value=posts), \
          patch("trump_watcher.analyze_posts", return_value=[alert_text]), \
          patch("trump_watcher.send_email") as mock_send, \
+         patch("trump_watcher.save_alert"), \
          patch.dict("os.environ", {"BREVO_API_KEY": "test-key", "BREVO_SENDER_EMAIL": "from@test.com"}):
         trump_watcher.run()
 
@@ -199,6 +200,34 @@ def test_save_alert_writes_to_file():
             data = json.load(f)
     assert len(data) == 1
     assert data[0]["id"] == "test-id"
+
+
+def test_run_saves_alerts_to_file():
+    posts = [_make_post(10, "Tariffs on China!")]
+    alert_text = (
+        "---\n"
+        "🚨 TRUMP TRADE ALERT\n"
+        "📅 Date & Time: 2026-06-03T10:00:00Z\n"
+        "📝 Post Summary: Trump announced tariffs on China.\n"
+        "🎯 Tickers Likely Affected: BABA\n"
+        "📈 Direction: Bearish\n"
+        "🏭 Sector: Trade\n"
+        "⚡ Confidence: High\n"
+        "💡 Why It Matters: Trade war risk.\n"
+        "---"
+    )
+    with tempfile.TemporaryDirectory() as tmpdir:
+        alerts_path = str(pathlib.Path(tmpdir) / "trump_alerts.json")
+        with patch("trump_watcher.fetch_recent_posts", return_value=posts), \
+             patch("trump_watcher.analyze_posts", return_value=[alert_text]), \
+             patch("trump_watcher.send_email"), \
+             patch("trump_watcher.get_alerts_path", return_value=alerts_path), \
+             patch.dict("os.environ", {"BREVO_API_KEY": "k", "BREVO_SENDER_EMAIL": "s@s.com"}):
+            trump_watcher.run()
+        with open(alerts_path) as f:
+            data = json.load(f)
+    assert len(data) == 1
+    assert data[0]["direction"] == "Bearish"
 
 
 def test_save_alert_prepends_and_caps_at_100():
