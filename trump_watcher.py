@@ -26,8 +26,12 @@ def fetch_recent_posts(minutes: int = 60) -> list[dict]:
 
     result = []
     for post in posts:
-        created = datetime.fromisoformat(post["created_at"].replace("Z", "+00:00"))
+        try:
+            created = datetime.fromisoformat(post["created_at"].replace("Z", "+00:00"))
+        except (KeyError, ValueError):
+            continue
         if created >= cutoff:
-            post["content"] = _strip_html(post.get("content", ""))
-            result.append(post)
+            stripped_post = post.copy()
+            stripped_post["content"] = _strip_html(post.get("content", ""))
+            result.append(stripped_post)
     return result

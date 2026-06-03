@@ -35,3 +35,16 @@ def test_fetch_recent_posts_returns_empty_when_none_recent():
         posts = trump_watcher.fetch_recent_posts(minutes=60)
 
     assert posts == []
+
+
+def test_fetch_recent_posts_strips_html_from_content():
+    recent = _make_post(30, "Trade <b>China</b> tariffs!")
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = json.dumps([recent]).encode()
+    mock_resp.__enter__ = lambda s: s
+    mock_resp.__exit__ = MagicMock(return_value=False)
+
+    with patch("urllib.request.urlopen", return_value=mock_resp):
+        posts = trump_watcher.fetch_recent_posts(minutes=60)
+
+    assert posts[0]["content"] == "Trade China tariffs!"
