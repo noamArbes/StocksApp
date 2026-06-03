@@ -92,17 +92,19 @@ def test_run_sends_email_when_alerts_found():
     posts = [_make_post(10, "Tariffs on China!")]
     alert_text = "---\n🚨 TRUMP TRADE ALERT\n...\n---"
 
-    with patch.dict("os.environ", {"BREVO_API_KEY": "test_key", "BREVO_SENDER_EMAIL": "sender@example.com"}), \
-         patch("trump_watcher.fetch_recent_posts", return_value=posts), \
+    with patch("trump_watcher.fetch_recent_posts", return_value=posts), \
          patch("trump_watcher.analyze_posts", return_value=[alert_text]), \
-         patch("trump_watcher.send_email") as mock_send:
+         patch("trump_watcher.send_email") as mock_send, \
+         patch.dict("os.environ", {"BREVO_API_KEY": "test-key", "BREVO_SENDER_EMAIL": "from@test.com"}):
         trump_watcher.run()
 
-    mock_send.assert_called_once()
-    args = mock_send.call_args[0]
-    assert "Trump Trade Alert" in args[0]
-    assert alert_text in args[1]
-    assert args[2] == "noamarbes1@gmail.com"
+    mock_send.assert_called_once_with(
+        "🚨 Trump Trade Alert — 1 post flagged",
+        alert_text,
+        "noamarbes1@gmail.com",
+        "test-key",
+        "from@test.com",
+    )
 
 
 def test_run_does_not_send_email_when_no_alerts():
@@ -110,6 +112,26 @@ def test_run_does_not_send_email_when_no_alerts():
          patch("trump_watcher.fetch_recent_posts", return_value=[]), \
          patch("trump_watcher.analyze_posts", return_value=[]), \
          patch("trump_watcher.send_email") as mock_send:
+        trump_watcher.run()
+
+    mock_send.assert_not_called()
+
+
+def test_run_does_not_send_email_on_fetch_error():
+    with patch("trump_watcher.fetch_recent_posts", side_effect=Exception("network error")), \
+         patch("trump_watcher.send_email") as mock_send, \
+         patch.dict("os.environ", {"BREVO_API_KEY": "test-key", "BREVO_SENDER_EMAIL": "from@test.com"}):
+        trump_watcher.run()
+
+    mock_send.assert_not_called()
+
+
+def test_run_does_not_send_email_on_analyze_error():
+    posts = [_make_post(10, "Tariffs on China!")]
+    with patch("trump_watcher.fetch_recent_posts", return_value=posts), \
+         patch("trump_watcher.analyze_posts", side_effect=Exception("API error")), \
+         patch("trump_watcher.send_email") as mock_send, \
+         patch.dict("os.environ", {"BREVO_API_KEY": "test-key", "BREVO_SENDER_EMAIL": "from@test.com"}):
         trump_watcher.run()
 
     mock_send.assert_not_called()
