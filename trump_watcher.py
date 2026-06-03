@@ -4,6 +4,7 @@ import re
 import urllib.request
 from datetime import datetime, timezone, timedelta
 import anthropic
+from checker import send_email
 
 # Trump's Truth Social account ID (Mastodon-compatible API)
 _TRUMP_ACCOUNT_ID = "107780257626128497"
@@ -90,3 +91,38 @@ def analyze_posts(posts: list[dict]) -> list[str]:
         if text != "NO_ALERT":
             alerts.append(text)
     return alerts
+
+
+def run() -> None:
+    """Main entry point: fetch, analyze, and email alerts if any posts are flagged."""
+    api_key = os.environ.get("BREVO_API_KEY")
+    sender = os.environ.get("BREVO_SENDER_EMAIL")
+    if not api_key or not sender:
+        print("[TrumpWatcher] Missing BREVO_API_KEY or BREVO_SENDER_EMAIL — skipping email")
+        return
+
+    try:
+        posts = fetch_recent_posts(minutes=60)
+    except Exception as e:
+        print(f"[TrumpWatcher] Failed to fetch posts: {e}")
+        return
+
+    if not posts:
+        print("[TrumpWatcher] No recent posts found")
+        return
+
+    try:
+        alerts = analyze_posts(posts)
+    except Exception as e:
+        print(f"[TrumpWatcher] Failed to analyze posts: {e}")
+        return
+
+    if not alerts:
+        print("[TrumpWatcher] No posts flagged")
+        return
+
+    n = len(alerts)
+    subject = f"🚨 Trump Trade Alert — {n} post{'s' if n > 1 else ''} flagged"
+    body = "\n\n".join(alerts)
+    send_email(subject, body, _RECIPIENT, api_key, sender)
+    print(f"[TrumpWatcher] Alert email sent — {n} post(s) flagged")
