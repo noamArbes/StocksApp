@@ -168,6 +168,18 @@ def test_parse_alert_extracts_fields():
     assert "id" in result
 
 
+def test_parse_alert_handles_single_ticker():
+    raw = "🎯 Tickers Likely Affected: AAPL"
+    result = trump_watcher.parse_alert(raw, {})
+    assert result["tickers"] == ["AAPL"]
+
+
+def test_parse_alert_handles_empty_tickers():
+    raw = "🎯 Tickers Likely Affected:"
+    result = trump_watcher.parse_alert(raw, {})
+    assert result["tickers"] == []
+
+
 def test_save_alert_writes_to_file():
     alert = {
         "id": "test-id",

@@ -61,10 +61,9 @@ def get_alerts_path() -> str:
 def parse_alert(raw: str, post: dict) -> dict:
     """Parse Claude's formatted alert string into a structured dict."""
     def _extract(label: str) -> str:
-        for line in raw.splitlines():
-            if line.startswith(label):
-                return line[len(label):].strip()
-        return ""
+        pattern = re.escape(label) + r"[ \t]*(.*)"
+        match = re.search(pattern, raw)
+        return match.group(1).strip() if match else ""
 
     tickers_raw = _extract("🎯 Tickers Likely Affected:")
     tickers = [t.strip() for t in tickers_raw.split(",") if t.strip()]
