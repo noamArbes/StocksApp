@@ -48,3 +48,40 @@ def test_fetch_recent_posts_strips_html_from_content():
         posts = trump_watcher.fetch_recent_posts(minutes=60)
 
     assert posts[0]["content"] == "Trade China tariffs!"
+
+
+def test_analyze_posts_returns_formatted_alerts():
+    posts = [_make_post(10, "We are putting massive tariffs on China steel!")]
+    fake_alert = (
+        "---\n"
+        "🚨 TRUMP TRADE ALERT\n"
+        "📅 Date & Time: 2026-06-03 10:00 UTC\n"
+        "📝 Post Summary: Trump announced massive tariffs on Chinese steel.\n"
+        "🎯 Tickers Likely Affected: X, NUE, STLD\n"
+        "📈 Direction: Bearish\n"
+        "🏭 Sector: Steel / Materials\n"
+        "⚡ Confidence: High\n"
+        "💡 Why It Matters: Tariffs on China steel directly hit domestic steel producers.\n"
+        "---"
+    )
+    mock_message = MagicMock()
+    mock_message.content = [MagicMock(text=fake_alert)]
+
+    with patch("trump_watcher._claude_client") as mock_client:
+        mock_client.messages.create.return_value = mock_message
+        alerts = trump_watcher.analyze_posts(posts)
+
+    assert len(alerts) == 1
+    assert "🚨 TRUMP TRADE ALERT" in alerts[0]
+
+
+def test_analyze_posts_returns_empty_for_non_market_post():
+    posts = [_make_post(10, "Happy Sunday everyone! God bless America.")]
+    mock_message = MagicMock()
+    mock_message.content = [MagicMock(text="NO_ALERT")]
+
+    with patch("trump_watcher._claude_client") as mock_client:
+        mock_client.messages.create.return_value = mock_message
+        alerts = trump_watcher.analyze_posts(posts)
+
+    assert alerts == []
