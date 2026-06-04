@@ -1189,46 +1189,6 @@ def trump_alerts():
     return jsonify({"alerts": alerts})
 
 
-@app.route("/api/trump-alerts/test")
-@login_required
-def trump_alerts_test():
-    """Temporary test route: saves a fake alert and sends a test email."""
-    import trump_watcher as _tw
-    fake_raw = (
-        "---\n"
-        "🚨 TRUMP TRADE ALERT\n"
-        "📅 Date & Time: 2026-06-04T10:00:00Z\n"
-        "📝 Post Summary: Trump announced 50% tariffs on Chinese electronics.\n"
-        "🎯 Tickers Likely Affected: AAPL, QCOM, NVDA\n"
-        "📈 Direction: Bearish\n"
-        "🏭 Sector: Technology / Semiconductors\n"
-        "⚡ Confidence: High\n"
-        "💡 Why It Matters: Apple and chip makers rely heavily on China supply chain.\n"
-        "---"
-    )
-    fake_post = {"content": "50% tariffs on Chinese electronics!", "created_at": "2026-06-04T10:00:00Z"}
-    alert = _tw.parse_alert(fake_raw, fake_post)
-    _tw.save_alert(alert)
-
-    api_key = os.environ.get("BREVO_API_KEY")
-    sender = os.environ.get("BREVO_SENDER_EMAIL")
-    email_status = "skipped (no Brevo config)"
-    if api_key and sender:
-        try:
-            from checker import send_email
-            send_email(
-                "🚨 Trump Trade Alert — TEST",
-                fake_raw,
-                "noamarbes1@gmail.com",
-                api_key,
-                sender,
-            )
-            email_status = "sent to noamarbes1@gmail.com"
-        except Exception as e:
-            email_status = f"failed: {e}"
-
-    return jsonify({"status": "ok", "alert_saved": True, "email": email_status})
-
 
 @app.route("/api/research/analyze")
 @login_required
