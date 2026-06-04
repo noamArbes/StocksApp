@@ -13,6 +13,7 @@
 <div class="tab-bar" style="margin-top:8px">
   <button class="tab tab-active" id="tab-find" onclick="switchTab('find')">Find Tickers</button>
   <button class="tab" id="tab-analyze" onclick="switchTab('analyze')">Analyze Stock</button>
+  <button class="tab" id="tab-trump" onclick="switchTab('trump')">🚨 Trump Alerts</button>
 </div>
 
 {# ── Find Tickers ── #}
@@ -125,6 +126,13 @@
   <div id="analyze-results"></div>
 </div>
 
+{# ── Trump Alerts ── #}
+<div id="panel-trump" style="display:none">
+  <div id="trump-alerts-list">
+    <p style="color:var(--muted);text-align:center;margin-top:32px">Loading alerts…</p>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -143,8 +151,56 @@ function safeUrl(url) {
 function switchTab(tab) {
   document.getElementById('panel-find').style.display = tab === 'find' ? '' : 'none';
   document.getElementById('panel-analyze').style.display = tab === 'analyze' ? '' : 'none';
+  document.getElementById('panel-trump').style.display = tab === 'trump' ? '' : 'none';
   document.getElementById('tab-find').className = 'tab' + (tab === 'find' ? ' tab-active' : '');
   document.getElementById('tab-analyze').className = 'tab' + (tab === 'analyze' ? ' tab-active' : '');
+  document.getElementById('tab-trump').className = 'tab' + (tab === 'trump' ? ' tab-active' : '');
+  if (tab === 'trump') loadTrumpAlerts();
+}
+
+// ── Trump Alerts ──
+let _trumpAlertsLoaded = false;
+
+async function loadTrumpAlerts() {
+  if (_trumpAlertsLoaded) return;
+  const container = document.getElementById('trump-alerts-list');
+  try {
+    const res = await fetch('/api/trump-alerts');
+    const data = await res.json();
+    if (!data.alerts || data.alerts.length === 0) {
+      container.innerHTML = '<p style="color:var(--muted);text-align:center;margin-top:32px">No alerts recorded yet. Alerts appear here when Trump posts market-moving content.</p>';
+      return;
+    }
+    container.innerHTML = data.alerts.map(a => {
+      const dirColor = a.direction === 'Bullish' ? 'var(--green, #22c55e)'
+                     : a.direction === 'Bearish' ? 'var(--red, #ef4444)'
+                     : '#f59e0b';
+      const confColor = a.confidence === 'High' ? 'var(--green, #22c55e)'
+                      : a.confidence === 'Low'  ? 'var(--red, #ef4444)'
+                      : '#f59e0b';
+      const tickers = (a.tickers || []).map(t =>
+        `<span style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:.8rem;font-weight:600">${esc(t)}</span>`
+      ).join(' ');
+      const ts = a.timestamp ? new Date(a.timestamp).toLocaleString() : '';
+      return `
+        <div class="card" style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span style="font-size:.8rem;color:var(--muted)">${esc(ts)}</span>
+            <span style="font-size:.8rem;font-weight:600;color:${dirColor}">${esc(a.direction)}</span>
+          </div>
+          <p style="margin:0 0 8px;font-weight:500">${esc(a.summary)}</p>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">${tickers}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:.82rem;margin-bottom:8px">
+            <span><strong>Sector:</strong> ${esc(a.sector)}</span>
+            <span><strong>Confidence:</strong> <span style="color:${confColor}">${esc(a.confidence)}</span></span>
+          </div>
+          <p style="margin:0;font-size:.85rem;color:var(--muted)">💡 ${esc(a.why_it_matters)}</p>
+        </div>`;
+    }).join('');
+    _trumpAlertsLoaded = true;
+  } catch (e) {
+    container.innerHTML = '<p style="color:var(--muted);text-align:center;margin-top:32px">Failed to load alerts.</p>';
+  }
 }
 
 // ── Presets ──
