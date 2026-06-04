@@ -159,10 +159,7 @@ function switchTab(tab) {
 }
 
 // ── Trump Alerts ──
-let _trumpAlertsLoaded = false;
-
 async function loadTrumpAlerts() {
-  if (_trumpAlertsLoaded) return;
   const container = document.getElementById('trump-alerts-list');
   try {
     const res = await fetch('/api/trump-alerts');
@@ -197,7 +194,6 @@ async function loadTrumpAlerts() {
           <p style="margin:0;font-size:.85rem;color:var(--muted)">💡 ${esc(a.why_it_matters)}</p>
         </div>`;
     }).join('');
-    _trumpAlertsLoaded = true;
   } catch (e) {
     container.innerHTML = '<p style="color:var(--muted);text-align:center;margin-top:32px">Failed to load alerts.</p>';
   }
