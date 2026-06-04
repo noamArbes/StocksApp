@@ -127,8 +127,8 @@ def fetch_recent_posts(minutes: int = 60) -> list[dict]:
     return result
 
 
-def analyze_posts(posts: list[dict]) -> list[str]:
-    """Analyze posts with Claude. Returns a list of formatted alert strings for flagged posts."""
+def analyze_posts(posts: list[dict]) -> list[tuple[str, dict]]:
+    """Analyze posts with Claude. Returns (alert_string, source_post) pairs for flagged posts."""
     alerts = []
     for post in posts:
         content = post.get("content", "").strip()
@@ -150,7 +150,7 @@ def analyze_posts(posts: list[dict]) -> list[str]:
             print(f"[TrumpWatcher] Claude API error for post {post.get('id', '?')}: {e}")
             continue
         if text.upper() != "NO_ALERT":
-            alerts.append(text)
+            alerts.append((text, post))
     return alerts
 
 
@@ -173,25 +173,25 @@ def run() -> None:
         return
 
     try:
-        alert_strings = analyze_posts(posts)
+        alert_pairs = analyze_posts(posts)
     except Exception as e:
         print(f"[TrumpWatcher] Failed to analyze posts: {e}")
         return
 
-    if not alert_strings:
+    if not alert_pairs:
         print("[TrumpWatcher] No posts flagged")
         return
 
-    # Save each alert to disk (pair alert string with its source post by index)
-    for raw, post in zip(alert_strings, posts):
+    # Save each alert to disk (correctly paired with its source post)
+    for raw, post in alert_pairs:
         try:
             alert = parse_alert(raw, post)
             save_alert(alert)
         except Exception as e:
             print(f"[TrumpWatcher] Failed to save alert: {e}")
 
-    n = len(alert_strings)
+    n = len(alert_pairs)
     subject = f"🚨 Trump Trade Alert — {n} post{'s' if n > 1 else ''} flagged"
-    body = "\n\n".join(alert_strings)
+    body = "\n\n".join(raw for raw, _ in alert_pairs)
     send_email(subject, body, _RECIPIENT, api_key, sender)
     print(f"[TrumpWatcher] Alert email sent — {n} post(s) flagged")

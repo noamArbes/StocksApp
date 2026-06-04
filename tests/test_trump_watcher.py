@@ -73,10 +73,10 @@ def test_analyze_posts_returns_formatted_alerts():
     mock_client.messages.create.return_value = mock_message
 
     with patch("trump_watcher._get_claude_client", return_value=mock_client):
-        alerts = trump_watcher.analyze_posts(posts)
+        alert_pairs = trump_watcher.analyze_posts(posts)
 
-    assert len(alerts) == 1
-    assert "🚨 TRUMP TRADE ALERT" in alerts[0]
+    assert len(alert_pairs) == 1
+    assert "🚨 TRUMP TRADE ALERT" in alert_pairs[0][0]
 
 
 def test_analyze_posts_returns_empty_for_non_market_post():
@@ -97,7 +97,7 @@ def test_run_sends_email_when_alerts_found():
     alert_text = "---\n🚨 TRUMP TRADE ALERT\n...\n---"
 
     with patch("trump_watcher.fetch_recent_posts", return_value=posts), \
-         patch("trump_watcher.analyze_posts", return_value=[alert_text]), \
+         patch("trump_watcher.analyze_posts", return_value=[(alert_text, _make_post(10, "Tariffs on China!"))]), \
          patch("trump_watcher.send_email") as mock_send, \
          patch("trump_watcher.save_alert"), \
          patch.dict("os.environ", {"BREVO_API_KEY": "test-key", "BREVO_SENDER_EMAIL": "from@test.com"}):
@@ -219,7 +219,7 @@ def test_run_saves_alerts_to_file():
     with tempfile.TemporaryDirectory() as tmpdir:
         alerts_path = str(pathlib.Path(tmpdir) / "trump_alerts.json")
         with patch("trump_watcher.fetch_recent_posts", return_value=posts), \
-             patch("trump_watcher.analyze_posts", return_value=[alert_text]), \
+             patch("trump_watcher.analyze_posts", return_value=[(alert_text, posts[0])]), \
              patch("trump_watcher.send_email"), \
              patch("trump_watcher.get_alerts_path", return_value=alerts_path), \
              patch.dict("os.environ", {"BREVO_API_KEY": "k", "BREVO_SENDER_EMAIL": "s@s.com"}):
