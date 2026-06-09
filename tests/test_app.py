@@ -1310,3 +1310,81 @@ def test_trump_alerts_route_returns_empty_when_no_file(client):
     data = resp.get_json()
     assert data == {"alerts": []}
 
+
+# ─── Journal fixtures and tests ────────────────────────────────────────────
+
+@pytest.fixture
+def journal_client(tmp_path, monkeypatch):
+    alarms_file = tmp_path / "alarms.json"
+    alarms_file.write_text(json.dumps([]))
+    journal_file = tmp_path / "journal.json"
+    journal_file.write_text(json.dumps([]))
+    monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
+    monkeypatch.setattr(app_module, "_journal_path", lambda: str(journal_file))
+    flask_app.config["TESTING"] = True
+    with flask_app.test_client() as c:
+        c.post("/login", data={"password": "testpass"})
+        yield c, str(journal_file)
+
+
+def test_journal_page_requires_login(client):
+    resp = client.get("/journal")
+    assert resp.status_code == 302
+
+
+def test_get_journal_trades_empty(journal_client):
+    c, _ = journal_client
+    resp = c.get("/api/journal/trades")
+    assert resp.status_code == 200
+    assert resp.get_json() == []
+
+
+def test_post_journal_trade_saves_and_calculates_r(journal_client):
+    c, path = journal_client
+    trade = {
+        "ticker": "NVDA",
+        "date": "2024-12-03",
+        "result": "Win",
+        "entry_price": 138.50,
+        "stop_price": 134.00,
+        "target_price": 148.00,
+    }
+    resp = c.post("/api/journal/trades", json=trade)
+    assert resp.status_code == 201
+    saved = resp.get_json()
+    assert saved["ticker"] == "NVDA"
+    assert "id" in saved
+    assert saved["r_multiple_entry"] == round(9.50 / 4.50, 2)
+
+
+def test_delete_journal_trades_clears_all(journal_client):
+    import journal as j
+    c, path = journal_client
+    j.save_trade({"ticker": "NVDA"}, path)
+    resp = c.delete("/api/journal/trades")
+    assert resp.status_code == 200
+    assert j.load_trades(path) == []
+
+
+def test_journal_chat_returns_reply_and_trade(journal_client, monkeypatch):
+    import journal as j
+    c, _ = journal_client
+    monkeypatch.setattr(
+        j, "call_claude_chat",
+        lambda msgs: 'PART 1: No violations.\n\nPART 2: {"ticker": "NVDA", "result": "Win"}'
+    )
+    resp = c.post("/api/journal/chat", json={"messages": [], "message": "Bought NVDA"})
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["reply"] == "No violations."
+    assert data["trade"]["ticker"] == "NVDA"
+
+
+def test_journal_review_returns_reply(journal_client, monkeypatch):
+    import journal as j
+    c, _ = journal_client
+    monkeypatch.setattr(j, "call_claude_review", lambda trades: "Win rate: 75%")
+    resp = c.post("/api/journal/review")
+    assert resp.status_code == 200
+    assert resp.get_json()["reply"] == "Win rate: 75%"
+

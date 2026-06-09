@@ -17,6 +17,7 @@ import cities_data
 import tase
 import research
 import trump_watcher
+import journal as journal_module
 
 # --- Startup validation ---
 _UI_PASSWORD = os.environ.get("UI_PASSWORD")
@@ -35,6 +36,7 @@ _TRADES_PATH = checker.get_trades_path()
 _SAVINGS_PATH = checker.get_savings_path()
 _SNAPSHOTS_PATH = checker.get_snapshots_path()
 _SIEMENS_PATH = checker.get_siemens_path()
+_JOURNAL_PATH = journal_module.get_journal_path()
 _SIEMENS_PORTAL_URL = "https://samlparticipant.equateplus.com/EquatePlusParticipant2/start"
 _tase_cache = tase.load_securities_cache()
 _PRESETS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "presets.json")
@@ -96,6 +98,25 @@ def _savings_path():
 
 def _snapshots_path():
     return _SNAPSHOTS_PATH
+
+
+def _journal_path():
+    return _JOURNAL_PATH
+
+
+def read_journal_trades():
+    with _lock:
+        return journal_module.load_trades(_journal_path())
+
+
+def write_journal_trade(trade):
+    with _lock:
+        return journal_module.save_trade(trade, _journal_path())
+
+
+def clear_journal_trades():
+    with _lock:
+        journal_module.clear_trades(_journal_path())
 
 
 def read_savings():
@@ -1276,6 +1297,70 @@ def research_presets_save():
 def research_presets_delete(preset_id):
     research.delete_preset(_PRESETS_PATH, preset_id)
     return jsonify({"ok": True})
+
+
+@app.route("/journal")
+def journal_tab():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+    return render_template("journal.html")
+
+
+@app.route("/api/journal/trades", methods=["GET"])
+def api_journal_trades_get():
+    if not session.get("logged_in"):
+        return jsonify({"error": "unauthorized"}), 401
+    return jsonify(read_journal_trades())
+
+
+@app.route("/api/journal/trades", methods=["POST"])
+def api_journal_trade_post():
+    if not session.get("logged_in"):
+        return jsonify({"error": "unauthorized"}), 401
+    trade = request.get_json()
+    r = journal_module.calculate_r_multiple(
+        trade.get("entry_price"), trade.get("stop_price"), trade.get("target_price")
+    )
+    if r is not None:
+        trade["r_multiple_entry"] = r
+    saved = write_journal_trade(trade)
+    return jsonify(saved), 201
+
+
+@app.route("/api/journal/trades", methods=["DELETE"])
+def api_journal_trades_delete():
+    if not session.get("logged_in"):
+        return jsonify({"error": "unauthorized"}), 401
+    clear_journal_trades()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/journal/chat", methods=["POST"])
+def api_journal_chat():
+    if not session.get("logged_in"):
+        return jsonify({"error": "unauthorized"}), 401
+    body = request.get_json()
+    messages = body.get("messages", [])
+    user_message = body.get("message", "")
+    messages = messages + [{"role": "user", "content": user_message}]
+    try:
+        raw = journal_module.call_claude_chat(messages)
+    except Exception:
+        return jsonify({"error": "AI unavailable"}), 503
+    reply, trade = journal_module.parse_claude_response(raw)
+    return jsonify({"reply": reply, "trade": trade})
+
+
+@app.route("/api/journal/review", methods=["POST"])
+def api_journal_review():
+    if not session.get("logged_in"):
+        return jsonify({"error": "unauthorized"}), 401
+    trades = read_journal_trades()
+    try:
+        reply = journal_module.call_claude_review(trades)
+    except Exception:
+        return jsonify({"error": "AI unavailable"}), 503
+    return jsonify({"reply": reply})
 
 
 if __name__ == "__main__":
