@@ -1300,24 +1300,23 @@ def research_presets_delete(preset_id):
 
 
 @app.route("/journal")
+@login_required
 def journal_tab():
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
     return render_template("journal.html")
 
 
 @app.route("/api/journal/trades", methods=["GET"])
+@login_required
 def api_journal_trades_get():
-    if not session.get("logged_in"):
-        return jsonify({"error": "unauthorized"}), 401
     return jsonify(read_journal_trades())
 
 
 @app.route("/api/journal/trades", methods=["POST"])
+@login_required
 def api_journal_trade_post():
-    if not session.get("logged_in"):
-        return jsonify({"error": "unauthorized"}), 401
     trade = request.get_json()
+    if not trade:
+        return jsonify({"error": "bad request"}), 400
     r = journal_module.calculate_r_multiple(
         trade.get("entry_price"), trade.get("stop_price"), trade.get("target_price")
     )
@@ -1328,17 +1327,15 @@ def api_journal_trade_post():
 
 
 @app.route("/api/journal/trades", methods=["DELETE"])
+@login_required
 def api_journal_trades_delete():
-    if not session.get("logged_in"):
-        return jsonify({"error": "unauthorized"}), 401
     clear_journal_trades()
     return jsonify({"ok": True})
 
 
 @app.route("/api/journal/chat", methods=["POST"])
+@login_required
 def api_journal_chat():
-    if not session.get("logged_in"):
-        return jsonify({"error": "unauthorized"}), 401
     body = request.get_json()
     messages = body.get("messages", [])
     user_message = body.get("message", "")
@@ -1352,9 +1349,8 @@ def api_journal_chat():
 
 
 @app.route("/api/journal/review", methods=["POST"])
+@login_required
 def api_journal_review():
-    if not session.get("logged_in"):
-        return jsonify({"error": "unauthorized"}), 401
     trades = read_journal_trades()
     try:
         reply = journal_module.call_claude_review(trades)
