@@ -36,24 +36,28 @@ def load_trades(path=None):
     path = path or get_journal_path()
     if not os.path.exists(path):
         return []
-    with open(path, "r") as f:
-        return json.load(f)
+    with open(path, "r", encoding="utf-8") as f:
+        try:
+            return json.load(f)
+        except json.JSONDecodeError:
+            return []
 
 
 def save_trade(trade, path=None):
     path = path or get_journal_path()
     trades = load_trades(path)
+    trade = dict(trade)          # shallow copy before mutating
     if not trade.get("id"):
         trade["id"] = str(uuid.uuid4())
     trades.append(trade)
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(trades, f, indent=2)
     return trade
 
 
 def clear_trades(path=None):
     path = path or get_journal_path()
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         json.dump([], f)
 
 
@@ -103,7 +107,7 @@ def call_claude_review(trades):
     trades_json = json.dumps(trades, indent=2)
     response = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=1024,
+        max_tokens=2048,
         system=_JOURNAL_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": f"REVIEW\n\nHere are all my trades:\n{trades_json}"}],
     )
