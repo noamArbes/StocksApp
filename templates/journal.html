@@ -1,0 +1,410 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&display=swap');
+
+  .journal-wrap {
+    display: flex;
+    gap: 0;
+    height: calc(100vh - 80px);
+    overflow: hidden;
+  }
+
+  /* ── Chat panel ── */
+  .journal-chat {
+    width: 40%;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #1e1e1e;
+    padding: 16px;
+    gap: 12px;
+    min-width: 0;
+  }
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .chat-msg {
+    max-width: 90%;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+    font-family: 'IBM Plex Mono', monospace;
+    white-space: pre-wrap;
+  }
+  .chat-msg.user {
+    align-self: flex-end;
+    background: #1a1a1a;
+    color: #ccc;
+  }
+  .chat-msg.ai {
+    align-self: flex-start;
+    background: #111;
+    color: #eee;
+    border: 1px solid #222;
+  }
+  .chat-input-area {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+  }
+  .chat-input-area textarea {
+    flex: 1;
+    background: #111;
+    border: 1px solid #333;
+    color: #eee;
+    border-radius: 6px;
+    padding: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    resize: none;
+    height: 72px;
+  }
+  .chat-input-area textarea:focus { outline: none; border-color: #444; }
+  .btn-send {
+    background: #2CC84A;
+    color: #000;
+    border: none;
+    border-radius: 6px;
+    padding: 0 16px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    height: 36px;
+    flex-shrink: 0;
+  }
+  .btn-send:hover { background: #25a83e; }
+  .btn-send:disabled { opacity: 0.5; cursor: default; }
+
+  /* ── Cards panel ── */
+  .journal-cards {
+    width: 60%;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .cards-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-shrink: 0;
+  }
+  .trade-count {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: #555;
+    flex: 1;
+  }
+  .btn-review {
+    background: transparent;
+    border: 1px solid #444;
+    color: #ccc;
+    border-radius: 4px;
+    padding: 5px 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .btn-review:hover { border-color: #666; color: #eee; }
+  .btn-clear {
+    background: transparent;
+    border: 1px solid #333;
+    color: #666;
+    border-radius: 4px;
+    padding: 5px 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .btn-clear:hover { border-color: #c0392b; color: #e74c3c; }
+  .cards-list {
+    overflow-y: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* ── Trade card ── */
+  .trade-card {
+    background: #0f0f0f;
+    border: 1px solid #1e1e1e;
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-family: 'IBM Plex Mono', monospace;
+    animation: slideIn 0.25s ease-out;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .card-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .card-ticker { font-size: 16px; font-weight: 700; color: #eee; }
+  .card-date   { font-size: 11px; color: #444; margin-left: auto; }
+  .badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge-Win       { background: #0d3b1a; color: #2CC84A; }
+  .badge-Loss      { background: #3b0d0d; color: #e74c3c; }
+  .badge-Breakeven { background: #1a1a1a; color: #777; }
+  .badge-Open      { background: #0d1f2e; color: #4a9ede; }
+  .card-setup { font-size: 11px; color: #555; margin-bottom: 8px; }
+  .card-prices {
+    font-size: 12px;
+    color: #999;
+    margin-bottom: 8px;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .card-prices .lbl { color: #444; font-size: 10px; margin-right: 3px; }
+  .card-r-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .r-entry  { font-size: 11px; color: #e6a817; white-space: nowrap; }
+  .r-actual { font-size: 11px; color: #888;    white-space: nowrap; }
+  .r-bar-wrap {
+    flex: 1;
+    height: 4px;
+    background: #1a1a1a;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .r-bar-fill          { height: 100%; border-radius: 2px; }
+  .r-bar-fill.win      { background: #2CC84A; }
+  .r-bar-fill.loss     { background: #e74c3c; }
+  .r-bar-fill.neutral  { background: #555; }
+  .card-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 11px;
+    color: #555;
+    margin-bottom: 6px;
+  }
+  .exec-dots { letter-spacing: 2px; }
+  .dot-on  { color: #2CC84A; }
+  .dot-off { color: #2a2a2a; }
+  .emotion-tag {
+    background: #161616;
+    border: 1px solid #222;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 10px;
+    color: #666;
+  }
+  .card-note { font-size: 11px; margin-top: 4px; line-height: 1.4; }
+  .card-note.did-right    { color: #1a6b2e; }
+  .card-note.would-change { color: #444; }
+</style>
+
+<div class="journal-wrap">
+
+  <!-- Left: AI Chat -->
+  <div class="journal-chat">
+    <div class="chat-messages" id="chatMessages"></div>
+    <div class="chat-input-area">
+      <textarea id="chatInput"
+        placeholder="e.g. Bought NVDA on 12/3, breakout at $138.50, stop $134, target $148, execution 4/5, calm. Won at $146.20."
+        onkeydown="handleKey(event)"></textarea>
+      <button class="btn-send" id="sendBtn" onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+  <!-- Right: Trade Cards -->
+  <div class="journal-cards">
+    <div class="cards-header">
+      <span class="trade-count" id="tradeCount">0 trades</span>
+      <button class="btn-review" onclick="requestReview()">REQUEST REVIEW</button>
+      <button class="btn-clear"  onclick="clearAll()">CLEAR ALL</button>
+    </div>
+    <div class="cards-list" id="cardsList"></div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let conversationHistory = [];
+
+  const SETUP_LABELS = {
+    breakout: 'Breakout', pullback_ema: 'Pullback EMA',
+    range: 'Range', vcp: 'VCP', other: 'Other'
+  };
+
+  function fmtSetup(s)  { return SETUP_LABELS[s] || s || '—'; }
+  function fmtVal(v, p) { return v != null ? `${p || ''}${v}` : '—'; }
+
+  function execDots(q) {
+    const n = parseInt(q) || 0;
+    let s = '';
+    for (let i = 1; i <= 5; i++)
+      s += `<span class="${i <= n ? 'dot-on' : 'dot-off'}">${i <= n ? '●' : '○'}</span>`;
+    return `<span class="exec-dots">${s}</span>`;
+  }
+
+  function rBarPct(actual_r) {
+    if (actual_r == null) return 0;
+    return Math.min(Math.abs(parseFloat(actual_r)) * 20, 100);
+  }
+
+  function rBarClass(result) {
+    if (result === 'Win') return 'win';
+    if (result === 'Loss') return 'loss';
+    return 'neutral';
+  }
+
+  function renderCard(t) {
+    const result = t.result || 'Open';
+    const pct    = rBarPct(t.actual_r);
+    return `
+      <div class="trade-card" id="card-${t.id}">
+        <div class="card-top">
+          <span class="card-ticker">${t.ticker || '—'}</span>
+          <span class="badge badge-${result}">${result}</span>
+          <span class="card-date">${t.date || ''}</span>
+        </div>
+        <div class="card-setup">${fmtSetup(t.setup_type)}</div>
+        <div class="card-prices">
+          <span><span class="lbl">Entry</span>${fmtVal(t.entry_price, '$')}</span>
+          <span><span class="lbl">Stop</span>${fmtVal(t.stop_price, '$')}</span>
+          <span><span class="lbl">Target</span>${fmtVal(t.target_price, '$')}</span>
+        </div>
+        <div class="card-r-row">
+          <span class="r-entry">R ${fmtVal(t.r_multiple_entry)}</span>
+          <div class="r-bar-wrap">
+            <div class="r-bar-fill ${rBarClass(result)}" style="width:${pct}%"></div>
+          </div>
+          <span class="r-actual">Actual ${fmtVal(t.actual_r)}</span>
+        </div>
+        <div class="card-meta">
+          ${execDots(t.execution_quality)}
+          <span class="emotion-tag">${t.emotional_state || '—'}</span>
+        </div>
+        ${t.did_right    ? `<div class="card-note did-right">✓ ${t.did_right}</div>`       : ''}
+        ${t.would_change ? `<div class="card-note would-change">△ ${t.would_change}</div>` : ''}
+      </div>`;
+  }
+
+  function addMsg(role, text) {
+    const div = document.createElement('div');
+    div.className = `chat-msg ${role}`;
+    div.textContent = text;
+    document.getElementById('chatMessages').appendChild(div);
+    div.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function updateCount() {
+    const n = document.getElementById('cardsList').querySelectorAll('.trade-card').length;
+    document.getElementById('tradeCount').textContent = `${n} trade${n !== 1 ? 's' : ''}`;
+  }
+
+  function prependCard(trade) {
+    const list = document.getElementById('cardsList');
+    const tmp  = document.createElement('div');
+    tmp.innerHTML = renderCard(trade);
+    list.insertBefore(tmp.firstElementChild, list.firstChild);
+    updateCount();
+  }
+
+  async function sendMessage() {
+    const input = document.getElementById('chatInput');
+    const text  = input.value.trim();
+    if (!text) return;
+
+    input.value = '';
+    document.getElementById('sendBtn').disabled = true;
+    addMsg('user', text);
+    conversationHistory.push({ role: 'user', content: text });
+
+    try {
+      const resp = await fetch('/api/journal/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: conversationHistory.slice(0, -1),
+          message: text
+        }),
+      });
+      const data = await resp.json();
+      if (data.error) { addMsg('ai', 'Something went wrong, try again.'); return; }
+
+      addMsg('ai', data.reply);
+      conversationHistory.push({ role: 'assistant', content: data.reply });
+
+      if (data.trade && data.trade.ticker) {
+        const saveResp = await fetch('/api/journal/trades', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data.trade),
+        });
+        if (saveResp.ok) prependCard(await saveResp.json());
+      }
+    } catch (e) {
+      addMsg('ai', 'Something went wrong, try again.');
+    } finally {
+      document.getElementById('sendBtn').disabled = false;
+    }
+  }
+
+  async function requestReview() {
+    addMsg('user', '[REQUEST REVIEW]');
+    try {
+      const resp = await fetch('/api/journal/review', { method: 'POST' });
+      const data = await resp.json();
+      addMsg('ai', data.error ? 'Something went wrong, try again.' : data.reply);
+    } catch (e) {
+      addMsg('ai', 'Something went wrong, try again.');
+    }
+  }
+
+  async function clearAll() {
+    if (!confirm('Delete all trade cards? This cannot be undone.')) return;
+    await fetch('/api/journal/trades', { method: 'DELETE' });
+    document.getElementById('cardsList').innerHTML = '';
+    updateCount();
+  }
+
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  }
+
+  // Init: load opening message + persisted trades
+  (async () => {
+    addMsg('ai', 'Tell me about your last trade.');
+    conversationHistory.push({ role: 'assistant', content: 'Tell me about your last trade.' });
+    try {
+      const trades = await (await fetch('/api/journal/trades')).json();
+      trades.forEach(t => {
+        const list = document.getElementById('cardsList');
+        const tmp  = document.createElement('div');
+        tmp.innerHTML = renderCard(t);
+        list.appendChild(tmp.firstElementChild);
+      });
+      updateCount();
+    } catch (e) {}
+  })();
+</script>
+{% endblock %}
