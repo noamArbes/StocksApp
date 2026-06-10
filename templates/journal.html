@@ -249,6 +249,10 @@
 <script>
   let conversationHistory = [];
 
+  function esc(s) {
+    return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
   const SETUP_LABELS = {
     breakout: 'Breakout', pullback_ema: 'Pullback EMA',
     range: 'Range', vcp: 'VCP', other: 'Other'
@@ -282,9 +286,9 @@
     return `
       <div class="trade-card" id="card-${t.id}">
         <div class="card-top">
-          <span class="card-ticker">${t.ticker || '—'}</span>
-          <span class="badge badge-${result}">${result}</span>
-          <span class="card-date">${t.date || ''}</span>
+          <span class="card-ticker">${esc(t.ticker) || '—'}</span>
+          <span class="badge badge-${esc(result)}">${esc(result)}</span>
+          <span class="card-date">${esc(t.date)}</span>
         </div>
         <div class="card-setup">${fmtSetup(t.setup_type)}</div>
         <div class="card-prices">
@@ -301,10 +305,10 @@
         </div>
         <div class="card-meta">
           ${execDots(t.execution_quality)}
-          <span class="emotion-tag">${t.emotional_state || '—'}</span>
+          <span class="emotion-tag">${esc(t.emotional_state) || '—'}</span>
         </div>
-        ${t.did_right    ? `<div class="card-note did-right">✓ ${t.did_right}</div>`       : ''}
-        ${t.would_change ? `<div class="card-note would-change">△ ${t.would_change}</div>` : ''}
+        ${t.did_right    ? `<div class="card-note did-right">✓ ${esc(t.did_right)}</div>`       : ''}
+        ${t.would_change ? `<div class="card-note would-change">△ ${esc(t.would_change)}</div>` : ''}
       </div>`;
   }
 
@@ -397,11 +401,11 @@
     conversationHistory.push({ role: 'assistant', content: 'Tell me about your last trade.' });
     try {
       const trades = await (await fetch('/api/journal/trades')).json();
-      trades.forEach(t => {
+      [...trades].reverse().forEach(t => {
         const list = document.getElementById('cardsList');
         const tmp  = document.createElement('div');
         tmp.innerHTML = renderCard(t);
-        list.appendChild(tmp.firstElementChild);
+        list.insertBefore(tmp.firstElementChild, list.firstChild);
       });
       updateCount();
     } catch (e) {}
