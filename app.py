@@ -1343,8 +1343,6 @@ def api_journal_trades_delete():
 @login_required
 def api_journal_chat():
     body = request.get_json()
-    if not body:
-        return jsonify({"error": "bad request"}), 400
     messages = body.get("messages", [])
     user_message = body.get("message", "")
     messages = messages + [{"role": "user", "content": user_message}]
