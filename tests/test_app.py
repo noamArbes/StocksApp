@@ -1424,3 +1424,13 @@ def test_holding_from_form_rejects_invalid_region():
     assert holding is None
     assert "region" in error.lower()
 
+
+def test_savings_form_contains_region_select(savings_client):
+    c, _ = savings_client
+    login(c)
+    resp = c.get("/savings/new?category=stocks")
+    assert resp.status_code == 200
+    assert b'name="region"' in resp.data
+    assert b"Israel" in resp.data
+    assert b"Europe" in resp.data
+

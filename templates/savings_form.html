@@ -28,6 +28,17 @@
         </div>
         {% endif %}
 
+        <label>Region (geographic exposure)
+            <select name="region">
+                <option value="" disabled {% if not form.get('region') and not holding %}selected{% endif %}>— select region —</option>
+                <option value="us" {% if (holding and holding.get('region') == 'us') or form.get('region') == 'us' %}selected{% endif %}>US</option>
+                <option value="israel" {% if (holding and holding.get('region') == 'israel') or form.get('region') == 'israel' %}selected{% endif %}>Israel</option>
+                <option value="europe" {% if (holding and holding.get('region') == 'europe') or form.get('region') == 'europe' %}selected{% endif %}>Europe</option>
+                <option value="china" {% if (holding and holding.get('region') == 'china') or form.get('region') == 'china' %}selected{% endif %}>China</option>
+                <option value="developing" {% if (holding and holding.get('region') == 'developing') or form.get('region') == 'developing' %}selected{% endif %}>Developing Markets</option>
+            </select>
+        </label>
+
         <input type="hidden" name="source" id="source-hidden" value="{{ form.get('source', 'yfinance') }}">
         <input type="hidden" name="tase_id" id="tase-id-hidden" value="{{ form.get('tase_id', '') }}">
         <input type="hidden" name="tase_type" id="tase-type-hidden" value="{{ form.get('tase_type', '') }}">
