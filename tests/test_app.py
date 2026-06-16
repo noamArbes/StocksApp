@@ -1472,3 +1472,21 @@ def test_savings_geography_card_rendered(savings_client):
     assert b"Geography" in resp.data
     assert b"savings-pie-card" in resp.data
 
+
+def test_savings_page_with_mixed_region_holdings(savings_client):
+    c, savings_file = savings_client
+    savings_file.write_text(json.dumps([
+        {"id": "h1", "ticker": "MSFT", "category": "stocks", "source": "yfinance",
+         "name": "Microsoft", "tase_id": "", "tase_type": "", "shares": 1,
+         "cost_basis": 100, "currency": "USD", "region": "us",
+         "last_updated": "2026-06-16T10:00:00+00:00"},
+        {"id": "h2", "ticker": "UNTAGGED", "category": "stocks", "source": "yfinance",
+         "name": "Untagged Stock", "tase_id": "", "tase_type": "", "shares": 5,
+         "cost_basis": 500, "currency": "USD", "region": None,
+         "last_updated": "2026-06-16T10:00:00+00:00"},
+    ]))
+    login(c)
+    resp = c.get("/savings")
+    assert resp.status_code == 200
+    assert b"Geography" in resp.data
+

@@ -41,6 +41,8 @@ _SIEMENS_PORTAL_URL = "https://samlparticipant.equateplus.com/EquatePlusParticip
 _tase_cache = tase.load_securities_cache()
 _PRESETS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "presets.json")
 
+VALID_REGIONS = ("us", "israel", "europe", "china", "developing")
+
 
 def _alarms_path():
     return _ALARMS_PATH
@@ -263,7 +265,6 @@ def _holding_from_form(form, existing=None):
 
     currency = "ILS" if is_tase else form.get("currency", "USD")
 
-    VALID_REGIONS = ("us", "israel", "europe", "china", "developing")
     region_raw = form.get("region", "").strip() or None
     if region_raw is not None and region_raw not in VALID_REGIONS:
         return None, "Invalid region — must be one of: US, Israel, Europe, China, Developing Markets"
@@ -671,7 +672,7 @@ def savings():
     _maybe_record_snapshot(holdings, prices, usd_to_ils)
 
     CATEGORIES = ("etf", "stocks", "mmf")
-    REGIONS = ("us", "israel", "europe", "china", "developing")
+    REGIONS = VALID_REGIONS
     REGION_LABELS = {
         "us": "US",
         "israel": "Israel",

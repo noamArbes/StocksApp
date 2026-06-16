@@ -30,7 +30,7 @@
 
         <label>Region (geographic exposure)
             <select name="region">
-                <option value="" disabled {% if not form.get('region') and not holding %}selected{% endif %}>— select region —</option>
+                <option value="" {% if not form.get('region') and not holding %}selected{% endif %}{% if holding and not holding.get('region') %}selected{% endif %}>— no region —</option>
                 <option value="us" {% if (holding and holding.get('region') == 'us') or form.get('region') == 'us' %}selected{% endif %}>US</option>
                 <option value="israel" {% if (holding and holding.get('region') == 'israel') or form.get('region') == 'israel' %}selected{% endif %}>Israel</option>
                 <option value="europe" {% if (holding and holding.get('region') == 'europe') or form.get('region') == 'europe' %}selected{% endif %}>Europe</option>
