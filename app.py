@@ -671,6 +671,14 @@ def savings():
     _maybe_record_snapshot(holdings, prices, usd_to_ils)
 
     CATEGORIES = ("etf", "stocks", "mmf")
+    REGIONS = ("us", "israel", "europe", "china", "developing")
+    REGION_LABELS = {
+        "us": "US",
+        "israel": "Israel",
+        "europe": "Europe",
+        "china": "China",
+        "developing": "Dev. Markets",
+    }
 
     holding_data = {}
     for h in holdings:
@@ -735,6 +743,46 @@ def savings():
         total_pl_ils += sie_gain
         total_cost_ils += sie_value - sie_gain
 
+    # Geographic breakdown
+    geo_data = {}
+    for region in REGIONS:
+        region_holdings = [h for h in holdings if h.get("region") == region]
+        value_ils = sum(holding_data[h["id"]]["current_value_ils"] or 0 for h in region_holdings)
+        geo_data[region] = {"value_ils": value_ils, "pct_of_portfolio": 0.0}
+
+    # Siemens is always Europe
+    if siemens:
+        geo_data["europe"]["value_ils"] += siemens.get("total_value_ils") or 0
+
+    # Unclassified holdings (region is null/missing)
+    unclassified_ils = sum(
+        holding_data[h["id"]]["current_value_ils"] or 0
+        for h in holdings if not h.get("region")
+    )
+
+    for region in REGIONS:
+        geo_data[region]["pct_of_portfolio"] = (
+            geo_data[region]["value_ils"] / total_value_ils * 100 if total_value_ils else 0.0
+        )
+
+    geo_pie = {}
+    geo_offset = 0.0
+    for region in REGIONS:
+        pct = geo_data[region]["pct_of_portfolio"]
+        dash = round(pct / 100 * 251.33, 2)
+        gap = round(251.33 - dash, 2)
+        geo_pie[region] = {"dash": dash, "gap": gap, "offset": round(-geo_offset, 2)}
+        geo_offset += dash
+
+    if unclassified_ils and total_value_ils:
+        pct = unclassified_ils / total_value_ils * 100
+        dash = round(pct / 100 * 251.33, 2)
+        geo_pie["unclassified"] = {
+            "dash": dash,
+            "gap": round(251.33 - dash, 2),
+            "offset": round(-geo_offset, 2),
+        }
+
     total_pl_pct = (total_pl_ils / total_cost_ils * 100) if total_cost_ils else None
     prev_total = total_value_ils - total_today_ils
     total_today_pct = (total_today_ils / prev_total * 100) if prev_total else None
@@ -784,6 +832,9 @@ def savings():
         siemens=siemens,
         siemens_updated_rel=_relative_time(siemens.get("last_updated")) if siemens else None,
         siemens_portal_url=_SIEMENS_PORTAL_URL,
+        geo_data=geo_data, geo_pie=geo_pie,
+        regions=REGIONS, region_labels=REGION_LABELS,
+        unclassified_ils=unclassified_ils,
     )
 
 

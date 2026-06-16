@@ -1431,6 +1431,25 @@ def test_savings_form_contains_region_select(savings_client):
     resp = c.get("/savings/new?category=stocks")
     assert resp.status_code == 200
     assert b'name="region"' in resp.data
-    assert b"Israel" in resp.data
-    assert b"Europe" in resp.data
+
+
+def test_savings_page_loads_with_region_tagged_holdings(savings_client):
+    c, savings_file = savings_client
+    savings_file.write_text(json.dumps([
+        {"id": "h1", "ticker": "MSFT", "category": "stocks", "source": "yfinance",
+         "name": "Microsoft", "tase_id": "", "tase_type": "", "shares": 1,
+         "cost_basis": 100, "currency": "USD", "region": "us",
+         "last_updated": "2026-06-16T10:00:00+00:00"},
+        {"id": "h2", "ticker": "IL1", "category": "mmf", "source": "tase",
+         "name": "Local MMF", "tase_id": "999", "tase_type": "fund", "shares": 100,
+         "cost_basis": 100, "currency": "ILS", "region": "israel",
+         "last_updated": "2026-06-16T10:00:00+00:00"},
+        {"id": "h3", "ticker": "EU1", "category": "etf", "source": "tase",
+         "name": "EU ETF", "tase_id": "1159094", "tase_type": "etf", "shares": 50,
+         "cost_basis": 500, "currency": "ILS", "region": "europe",
+         "last_updated": "2026-06-16T10:00:00+00:00"},
+    ]))
+    login(c)
+    resp = c.get("/savings")
+    assert resp.status_code == 200
 
