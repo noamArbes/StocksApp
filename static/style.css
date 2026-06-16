@@ -542,7 +542,7 @@ form label { position: relative; }
 
 .savings-summary {
     display: grid;
-    grid-template-columns: repeat(3, 1fr) auto;
+    grid-template-columns: 1.4fr 1.4fr 0.5fr auto auto;
     gap: 0.75rem;
     margin-bottom: 1.5rem;
     align-items: start;
@@ -644,6 +644,17 @@ form label { position: relative; }
     border-radius: 50%;
     flex-shrink: 0;
     display: inline-block;
+}
+
+.savings-today-compact .savings-stat-value-large,
+.savings-today-compact .savings-stat-amount {
+    font-size: 1rem;
+}
+.savings-today-compact .savings-stat-pct {
+    font-size: 0.85rem;
+}
+.savings-today-compact .savings-stat-breakdown {
+    display: none;
 }
 
 .savings-category {
