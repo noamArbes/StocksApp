@@ -484,7 +484,7 @@ document.getElementById('alarm-search').addEventListener('input', function() {
     </div>
 
     {# Today's Change #}
-    <div class="savings-stat-card">
+    <div class="savings-stat-card savings-today-compact">
         <div class="savings-stat-label">Today's Change (ILS)</div>
         {% if summary.total_today_ils is not none %}
         <div class="savings-stat-amount {% if summary.total_today_ils >= 0 %}value-positive{% else %}value-negative{% endif %}">
@@ -548,6 +548,55 @@ document.getElementById('alarm-search').addEventListener('input', function() {
             <div class="savings-legend-item">
                 <span class="savings-legend-dot" style="background:{{ pie_colors.siemens }}"></span>
                 <span>Siemens — {{ "%.1f"|format(pie.siemens.dash / 251.33 * 100) }}%</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# Geography donut card #}
+    {% set geo_colors = {'us': '#4fc3f7', 'israel': '#e57373', 'europe': '#aed581', 'china': '#ffb74d', 'developing': '#ce93d8'} %}
+    <div class="savings-stat-card savings-pie-card">
+        <div class="savings-stat-label">Geography</div>
+        <svg viewBox="0 0 120 120" width="130" height="130">
+            {% for region in regions %}
+            {% if geo_data[region].value_ils > 0 %}
+            <circle cx="60" cy="60" r="40"
+                fill="none"
+                stroke="{{ geo_colors[region] }}"
+                stroke-width="24"
+                stroke-dasharray="{{ geo_pie[region].dash }} {{ geo_pie[region].gap }}"
+                stroke-dashoffset="{{ geo_pie[region].offset }}"
+                transform="rotate(-90 60 60)"/>
+            {% endif %}
+            {% endfor %}
+            {% if geo_pie.unclassified is defined %}
+            <circle cx="60" cy="60" r="40"
+                fill="none"
+                stroke="#888888"
+                stroke-width="24"
+                stroke-dasharray="{{ geo_pie.unclassified.dash }} {{ geo_pie.unclassified.gap }}"
+                stroke-dashoffset="{{ geo_pie.unclassified.offset }}"
+                transform="rotate(-90 60 60)"/>
+            {% endif %}
+            <circle cx="60" cy="60" r="28" fill="white"/>
+            <text x="60" y="56" text-anchor="middle" font-size="9" fill="#7a6a5a">Geo</text>
+            <text x="60" y="68" text-anchor="middle" font-size="10" fill="#2d2a24" font-weight="bold">
+                ₪{{ "{:,.0f}".format(summary.total_value_ils / 1000) if summary.total_value_ils else '0' }}k
+            </text>
+        </svg>
+        <div class="savings-pie-legend">
+            {% for region in regions %}
+            {% if geo_data[region].value_ils > 0 %}
+            <div class="savings-legend-item">
+                <span class="savings-legend-dot" style="background:{{ geo_colors[region] }}"></span>
+                <span>{{ region_labels[region] }} — {{ "%.1f"|format(geo_data[region].pct_of_portfolio) }}%</span>
+            </div>
+            {% endif %}
+            {% endfor %}
+            {% if geo_pie.unclassified is defined %}
+            <div class="savings-legend-item">
+                <span class="savings-legend-dot" style="background:#888888"></span>
+                <span>Unclassified — {{ "%.1f"|format(unclassified_ils / summary.total_value_ils * 100) if summary.total_value_ils else '0' }}%</span>
             </div>
             {% endif %}
         </div>
