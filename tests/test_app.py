@@ -1388,3 +1388,39 @@ def test_journal_review_returns_reply(journal_client, monkeypatch):
     assert resp.status_code == 200
     assert resp.get_json()["reply"] == "Win rate: 75%"
 
+
+def test_holding_from_form_includes_region():
+    from werkzeug.datastructures import ImmutableMultiDict
+    form = ImmutableMultiDict([
+        ("source", "yfinance"), ("ticker", "MSFT"), ("name", "Microsoft"),
+        ("category", "stocks"), ("shares", "4"), ("cost_basis", "1000"),
+        ("currency", "USD"), ("region", "us"),
+    ])
+    holding, error = app_module._holding_from_form(form)
+    assert error is None
+    assert holding["region"] == "us"
+
+
+def test_holding_from_form_region_defaults_to_none_when_missing():
+    from werkzeug.datastructures import ImmutableMultiDict
+    form = ImmutableMultiDict([
+        ("source", "yfinance"), ("ticker", "MSFT"), ("name", "Microsoft"),
+        ("category", "stocks"), ("shares", "4"), ("cost_basis", "1000"),
+        ("currency", "USD"),
+    ])
+    holding, error = app_module._holding_from_form(form)
+    assert error is None
+    assert holding.get("region") is None
+
+
+def test_holding_from_form_rejects_invalid_region():
+    from werkzeug.datastructures import ImmutableMultiDict
+    form = ImmutableMultiDict([
+        ("source", "yfinance"), ("ticker", "MSFT"), ("name", "Microsoft"),
+        ("category", "stocks"), ("shares", "4"), ("cost_basis", "1000"),
+        ("currency", "USD"), ("region", "mars"),
+    ])
+    holding, error = app_module._holding_from_form(form)
+    assert holding is None
+    assert "region" in error.lower()
+

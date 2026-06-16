@@ -263,6 +263,11 @@ def _holding_from_form(form, existing=None):
 
     currency = "ILS" if is_tase else form.get("currency", "USD")
 
+    VALID_REGIONS = ("us", "israel", "europe", "china", "developing")
+    region_raw = form.get("region", "").strip() or None
+    if region_raw is not None and region_raw not in VALID_REGIONS:
+        return None, "Invalid region — must be one of: US, Israel, Europe, China, Developing Markets"
+
     return {
         "id": existing["id"] if existing else str(uuid.uuid4())[:8],
         "name": name,
@@ -274,6 +279,7 @@ def _holding_from_form(form, existing=None):
         "shares": shares,
         "cost_basis": cost_basis,
         "currency": currency,
+        "region": region_raw,
         "last_updated": datetime.now(timezone.utc).isoformat(),
     }, None
 
@@ -1337,6 +1343,8 @@ def api_journal_trades_delete():
 @login_required
 def api_journal_chat():
     body = request.get_json()
+    if not body:
+        return jsonify({"error": "bad request"}), 400
     messages = body.get("messages", [])
     user_message = body.get("message", "")
     messages = messages + [{"role": "user", "content": user_message}]
