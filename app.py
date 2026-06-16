@@ -213,7 +213,7 @@ def _holding_from_form(form, existing=None):
     if category not in ("stocks", "etf", "mmf"):
         return None, "Invalid category"
 
-    if category == "etf":
+    if category == "etf" and existing is None:
         current_value_raw = form.get("current_value", "").strip()
         if not current_value_raw:
             return None, "Current value is required"
