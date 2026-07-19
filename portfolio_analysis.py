@@ -42,7 +42,7 @@ that fund (do not ask for external data — use your best estimate of the fund's
 constituent stocks and compute each stock's dollar contribution (ETF value * estimated weight in \
 the ETF), then sum that with any direct share holdings of the same underlying company. Report the \
 combined total as a percentage of the TOTAL portfolio value given to you.
-- Return at most the top 15 tickers in "stock_exposure", sorted descending by pct.
+- Return at most the top 8 tickers in "stock_exposure", sorted descending by pct.
 - If there are no holdings for a region, omit or leave that region's object empty."""
 
 
@@ -84,7 +84,7 @@ def compute_analysis(holdings_summary: list[dict]) -> dict:
         ({"ticker": s.get("ticker", ""), "name": s.get("name", ""),
           "pct": float(s.get("pct") or 0)} for s in stock_exposure),
         key=lambda s: s["pct"], reverse=True,
-    )[:15]
+    )[:8]
 
     return {
         "sector_by_region": {

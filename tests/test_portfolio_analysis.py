@@ -40,7 +40,7 @@ def test_compute_analysis_parses_valid_json_response(monkeypatch):
     assert result["stock_exposure"][0]["pct"] == 18.0
 
 
-def test_compute_analysis_truncates_to_top_15(monkeypatch):
+def test_compute_analysis_truncates_to_top_8(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     payload = {
         "sector_by_region": {"us": {}, "israel": {}},
@@ -52,7 +52,7 @@ def test_compute_analysis_truncates_to_top_15(monkeypatch):
     result = portfolio_analysis.compute_analysis(
         [{"ticker": "QQQ", "name": "Invesco QQQ", "category": "etf", "region": "us", "value_ils": 10000}]
     )
-    assert len(result["stock_exposure"]) == 15
+    assert len(result["stock_exposure"]) == 8
     assert result["stock_exposure"][0]["ticker"] == "T19"
 
 
