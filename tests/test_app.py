@@ -1161,10 +1161,12 @@ def savings_client(tmp_path, monkeypatch):
     snapshots_file.write_text(json.dumps([]))
     trades_file = tmp_path / "trades.json"
     trades_file.write_text(json.dumps([]))
+    analysis_file = tmp_path / "ai_portfolio_analysis.json"
     monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
     monkeypatch.setattr(app_module, "_SAVINGS_PATH", str(savings_file))
     monkeypatch.setattr(app_module, "_SNAPSHOTS_PATH", str(snapshots_file))
     monkeypatch.setattr(app_module, "_trades_path", lambda: str(trades_file))
+    monkeypatch.setattr(app_module, "_ANALYSIS_PATH", str(analysis_file))
     monkeypatch.setattr(app_module, "_fetch_savings_prices", lambda h: {})
     monkeypatch.setattr(app_module.checker, "get_usd_to_ils", lambda: 3.7)
     flask_app.config["TESTING"] = True
@@ -1393,6 +1395,102 @@ def test_savings_edit_skips_mmf_category(savings_client, tmp_path):
     assert trades == []
 
 
+def test_savings_move_swaps_order_within_category(savings_client):
+    c, savings_file = savings_client
+    savings_file.write_text(json.dumps([
+        {"id": "a", "ticker": "AAA", "category": "stocks", "shares": 1, "cost_basis": 100,
+         "currency": "USD", "source": "yfinance", "name": "A", "tase_id": "", "tase_type": "",
+         "last_updated": "2026-05-06T10:00:00+00:00"},
+        {"id": "b", "ticker": "BBB", "category": "stocks", "shares": 1, "cost_basis": 100,
+         "currency": "USD", "source": "yfinance", "name": "B", "tase_id": "", "tase_type": "",
+         "last_updated": "2026-05-06T10:00:00+00:00"},
+    ]))
+    login(c)
+    resp = c.post("/savings/b/move", data={"direction": "up"}, follow_redirects=True)
+    assert resp.status_code == 200
+    holdings = json.loads(savings_file.read_text())
+    order = {h["id"]: h["order"] for h in holdings}
+    assert order["b"] < order["a"]
+
+
+def test_savings_move_up_at_top_is_noop(savings_client):
+    c, savings_file = savings_client
+    savings_file.write_text(json.dumps([
+        {"id": "a", "ticker": "AAA", "category": "stocks", "shares": 1, "cost_basis": 100,
+         "currency": "USD", "source": "yfinance", "name": "A", "tase_id": "", "tase_type": "",
+         "last_updated": "2026-05-06T10:00:00+00:00"},
+    ]))
+    login(c)
+    resp = c.post("/savings/a/move", data={"direction": "up"}, follow_redirects=True)
+    assert resp.status_code == 200
+    holdings = json.loads(savings_file.read_text())
+    assert holdings[0]["id"] == "a"
+
+
+def test_savings_move_does_not_reorder_other_category(savings_client):
+    c, savings_file = savings_client
+    savings_file.write_text(json.dumps([
+        {"id": "a", "ticker": "AAA", "category": "stocks", "shares": 1, "cost_basis": 100,
+         "currency": "USD", "source": "yfinance", "name": "A", "tase_id": "", "tase_type": "",
+         "last_updated": "2026-05-06T10:00:00+00:00"},
+        {"id": "e", "ticker": "VOO", "category": "etf", "shares": 1, "cost_basis": 100,
+         "currency": "USD", "source": "yfinance", "name": "E", "tase_id": "", "tase_type": "",
+         "last_updated": "2026-05-06T10:00:00+00:00"},
+    ]))
+    login(c)
+    resp = c.post("/savings/a/move", data={"direction": "down"}, follow_redirects=True)
+    assert resp.status_code == 200
+    holdings = json.loads(savings_file.read_text())
+    assert {h["id"] for h in holdings} == {"a", "e"}
+
+
+def test_savings_page_renders_no_data_state_when_no_analysis_cache(savings_client):
+    c, _ = savings_client
+    login(c)
+    resp = c.get("/savings")
+    assert resp.status_code == 200
+    assert b"No data yet" in resp.data
+    assert b"Not yet computed" in resp.data
+
+
+def test_savings_page_renders_cached_analysis(savings_client):
+    c, _ = savings_client
+    analysis_file = app_module._ANALYSIS_PATH
+    with open(analysis_file, "w") as f:
+        json.dump({
+            "sector_by_region": {"us": {"Technology": 65.0}, "israel": {"Finance": 100.0}},
+            "stock_exposure": [{"ticker": "AAPL", "name": "Apple", "pct": 22.5}],
+            "computed_at": "2026-05-06T10:00:00+00:00",
+        }, f)
+    login(c)
+    resp = c.get("/savings")
+    assert resp.status_code == 200
+    assert b"Technology" in resp.data
+    assert b"AAPL" in resp.data
+
+
+def test_savings_refresh_analysis_route_calls_run_and_redirects(savings_client, monkeypatch):
+    c, savings_file = savings_client
+    calls = []
+    monkeypatch.setattr(app_module.portfolio_analysis, "run",
+                         lambda savings_path, analysis_path: calls.append((savings_path, analysis_path)))
+    login(c)
+    resp = c.post("/savings/refresh-analysis", follow_redirects=True)
+    assert resp.status_code == 200
+    assert len(calls) == 1
+    assert calls[0][0] == str(savings_file)
+
+
+def test_savings_refresh_analysis_route_survives_exception(savings_client, monkeypatch):
+    c, _ = savings_client
+    def _raise(savings_path, analysis_path):
+        raise RuntimeError("Claude unavailable")
+    monkeypatch.setattr(app_module.portfolio_analysis, "run", _raise)
+    login(c)
+    resp = c.post("/savings/refresh-analysis", follow_redirects=True)
+    assert resp.status_code == 200
+
+
 def test_load_siemens_returns_none_when_file_missing():
     import checker
     assert checker.load_siemens("/nonexistent/path/siemens.json") is None
@@ -1536,17 +1634,6 @@ def test_savings_works_without_siemens_file(savings_client, tmp_path, monkeypatc
     login(c)
     resp = c.get("/savings")
     assert resp.status_code == 200
-
-
-def test_trump_alerts_route_returns_empty_when_no_file(client):
-    import trump_watcher as _tw
-    from unittest.mock import patch
-    login(client)
-    with patch.object(_tw, "get_alerts_path", return_value="/nonexistent/path/trump_alerts.json"):
-        resp = client.get("/api/trump-alerts")
-    assert resp.status_code == 200
-    data = resp.get_json()
-    assert data == {"alerts": []}
 
 
 # ─── Journal fixtures and tests ────────────────────────────────────────────

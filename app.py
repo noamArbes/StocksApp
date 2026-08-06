@@ -16,8 +16,8 @@ import checker
 import cities_data
 import tase
 import research
-import trump_watcher
 import journal as journal_module
+import portfolio_analysis
 
 # --- Startup validation ---
 _UI_PASSWORD = os.environ.get("UI_PASSWORD")
@@ -36,6 +36,7 @@ _TRADES_PATH = checker.get_trades_path()
 _SAVINGS_PATH = checker.get_savings_path()
 _SNAPSHOTS_PATH = checker.get_snapshots_path()
 _SIEMENS_PATH = checker.get_siemens_path()
+_ANALYSIS_PATH = checker.get_portfolio_analysis_path()
 _JOURNAL_PATH = journal_module.get_journal_path()
 _SIEMENS_PORTAL_URL = "https://samlparticipant.equateplus.com/EquatePlusParticipant2/start"
 _tase_cache = tase.load_securities_cache()
@@ -104,6 +105,15 @@ def _snapshots_path():
 
 def _journal_path():
     return _JOURNAL_PATH
+
+
+def _analysis_path():
+    return _ANALYSIS_PATH
+
+
+def read_portfolio_analysis():
+    with _lock:
+        return checker.load_portfolio_analysis(_analysis_path())
 
 
 def read_journal_trades():
@@ -368,6 +378,7 @@ def _holding_from_form(form, existing=None):
         "cost_basis": cost_basis,
         "currency": currency,
         "region": region_raw,
+        "order": existing.get("order") if existing else None,
         "last_updated": datetime.now(timezone.utc).isoformat(),
     }, None
 
@@ -754,10 +765,33 @@ def siemens_edit():
 
 # --- Savings ---
 
+_SECTOR_PALETTE = ["#4fc3f7", "#e57373", "#aed581", "#ffb74d", "#ce93d8",
+                    "#81c784", "#f06292", "#9575cd", "#4db6ac", "#dce775"]
+
+
+def _build_sector_pie(sector_pct: dict) -> list[dict]:
+    circ = 251.33
+    items = sorted(sector_pct.items(), key=lambda kv: kv[1], reverse=True)
+    slices, offset = [], 0.0
+    for i, (name, pct) in enumerate(items):
+        dash = round(pct / 100 * circ, 2)
+        slices.append({
+            "name": name, "pct": pct,
+            "color": _SECTOR_PALETTE[i % len(_SECTOR_PALETTE)],
+            "dash": dash, "gap": round(circ - dash, 2), "offset": round(-offset, 2),
+        })
+        offset += dash
+    return slices
+
+
 @app.route("/savings")
 @login_required
 def savings():
     holdings = read_savings()
+    holdings = [h for _, h in sorted(
+        enumerate(holdings),
+        key=lambda pair: pair[1].get("order") if pair[1].get("order") is not None else pair[0],
+    )]
     prices = _fetch_savings_prices(holdings)
     usd_to_ils = checker.get_usd_to_ils()
 
@@ -914,6 +948,12 @@ def savings():
         "total_today_pct": total_today_pct,
     }
 
+    analysis = read_portfolio_analysis()
+    us_sector_pie = _build_sector_pie((analysis or {}).get("sector_by_region", {}).get("us", {}))
+    il_sector_pie = _build_sector_pie((analysis or {}).get("sector_by_region", {}).get("israel", {}))
+    stock_exposure = (analysis or {}).get("stock_exposure", [])
+    analysis_computed_rel = _relative_time(analysis["computed_at"]) if analysis else None
+
     return render_template(
         "dashboard.html", tab="savings",
         holdings=holdings, holding_data=holding_data,
@@ -928,6 +968,8 @@ def savings():
         geo_data=geo_data, geo_pie=geo_pie,
         regions=REGIONS, region_labels=REGION_LABELS,
         unclassified_ils=unclassified_ils,
+        us_sector_pie=us_sector_pie, il_sector_pie=il_sector_pie,
+        stock_exposure=stock_exposure, analysis_computed_rel=analysis_computed_rel,
     )
 
 
@@ -944,6 +986,13 @@ def savings_new():
                                    category=request.form.get("category", category),
                                    today=today)
         def do_append(holdings):
+            same_cat = [h for h in holdings if h.get("category") == holding["category"]]
+            max_order = max(
+                (h.get("order") if h.get("order") is not None else i
+                 for i, h in enumerate(same_cat)),
+                default=-1,
+            )
+            holding["order"] = max_order + 1
             holdings.append(holding)
         modify_savings(do_append)
         if holding["category"] in AUTO_TRADE_CATEGORIES and holding["shares"] > _SHARE_EPSILON:
@@ -1041,6 +1090,50 @@ def savings_update_shares(hid):
         _log_auto_trade_for_shares_delta(before, after, delta_shares, 0, txn_date)
     return jsonify({"ok": True, "shares": shares,
                     "last_updated_rel": _relative_time(updated_ts)})
+
+
+@app.route("/savings/<hid>/move", methods=["POST"])
+@login_required
+def savings_move(hid):
+    direction = request.form.get("direction", "")
+    if direction not in ("up", "down"):
+        return redirect(url_for("savings"))
+
+    def do_move(holdings):
+        holding = next((h for h in holdings if h.get("id") == hid), None)
+        if holding is None:
+            return
+        cat = holding.get("category")
+        indices = [i for i, h in enumerate(holdings) if h.get("category") == cat]
+
+        def order_key(i):
+            o = holdings[i].get("order")
+            return o if o is not None else i
+        ordered = sorted(indices, key=order_key)
+        pos = next(p for p, i in enumerate(ordered) if holdings[i]["id"] == hid)
+        swap_pos = pos - 1 if direction == "up" else pos + 1
+        if swap_pos < 0 or swap_pos >= len(ordered):
+            return
+
+        ordered_ids = [holdings[i]["id"] for i in ordered]
+        ordered_ids[pos], ordered_ids[swap_pos] = ordered_ids[swap_pos], ordered_ids[pos]
+        id_to_order = {hid_: i for i, hid_ in enumerate(ordered_ids)}
+        for h in holdings:
+            if h.get("id") in id_to_order:
+                h["order"] = id_to_order[h["id"]]
+
+    modify_savings(do_move)
+    return redirect(url_for("savings"))
+
+
+@app.route("/savings/refresh-analysis", methods=["POST"])
+@login_required
+def savings_refresh_analysis():
+    try:
+        portfolio_analysis.run(savings_path=_savings_path(), analysis_path=_analysis_path())
+    except Exception as e:
+        print(f"[WARN] Portfolio analysis refresh failed: {e}")
+    return redirect(url_for("savings"))
 
 
 # --- Test email ---
@@ -1382,20 +1475,6 @@ def research_tab():
     return render_template("research.html")
 
 
-@app.route("/api/trump-alerts")
-@login_required
-def trump_alerts():
-    import trump_watcher as _tw
-    path = _tw.get_alerts_path()
-    try:
-        with open(path) as f:
-            alerts = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        alerts = []
-    return jsonify({"alerts": alerts})
-
-
-
 @app.route("/api/research/analyze")
 @login_required
 def research_analyze():
@@ -1548,7 +1627,7 @@ if __name__ == "__main__":
     from apscheduler.schedulers.background import BackgroundScheduler
     scheduler = BackgroundScheduler()
     scheduler.add_job(checker.run, "interval", minutes=15, kwargs={"path": _ALARMS_PATH})
-    scheduler.add_job(trump_watcher.run, "interval", minutes=60, id="trump_watcher")
+    scheduler.add_job(portfolio_analysis.run, "interval", hours=24, id="portfolio_analysis")
     scheduler.start()
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)

@@ -603,6 +603,90 @@ document.getElementById('alarm-search').addEventListener('input', function() {
     </div>
 </div>
 
+{# ══ AI Portfolio Analysis ══ #}
+<div style="display:flex;align-items:center;gap:12px;margin:4px 0 12px">
+    <h3 style="margin:0;flex:1">AI Portfolio Analysis</h3>
+    <span class="savings-updated">
+        {% if analysis_computed_rel %}Updated {{ analysis_computed_rel }}{% else %}Not yet computed{% endif %}
+    </span>
+    <form method="post" action="{{ url_for('savings_refresh_analysis') }}" style="display:inline">
+        <button type="submit" class="btn">🔄 Refresh Analysis</button>
+    </form>
+</div>
+<div class="savings-analysis-grid">
+    <div class="savings-stat-card savings-pie-card">
+        <div class="savings-stat-label">US Sectors</div>
+        {% if us_sector_pie %}
+        <svg viewBox="0 0 120 120" width="130" height="130">
+            {% for slice in us_sector_pie %}
+            <circle cx="60" cy="60" r="40" fill="none" stroke="{{ slice.color }}" stroke-width="24"
+                stroke-dasharray="{{ slice.dash }} {{ slice.gap }}"
+                stroke-dashoffset="{{ slice.offset }}"
+                transform="rotate(-90 60 60)"/>
+            {% endfor %}
+            <circle cx="60" cy="60" r="28" fill="white"/>
+            <text x="60" y="64" text-anchor="middle" font-size="9" fill="#7a6a5a">US</text>
+        </svg>
+        <div class="savings-pie-legend">
+            {% for slice in us_sector_pie %}
+            <div class="savings-legend-item">
+                <span class="savings-legend-dot" style="background:{{ slice.color }}"></span>
+                <span>{{ slice.name }} — {{ "%.1f"|format(slice.pct) }}%</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color:#7a6a5a;font-size:0.82rem;text-align:center;margin-top:24px">No data yet.</p>
+        {% endif %}
+    </div>
+
+    <div class="savings-stat-card savings-pie-card">
+        <div class="savings-stat-label">Israel Sectors</div>
+        {% if il_sector_pie %}
+        <svg viewBox="0 0 120 120" width="130" height="130">
+            {% for slice in il_sector_pie %}
+            <circle cx="60" cy="60" r="40" fill="none" stroke="{{ slice.color }}" stroke-width="24"
+                stroke-dasharray="{{ slice.dash }} {{ slice.gap }}"
+                stroke-dashoffset="{{ slice.offset }}"
+                transform="rotate(-90 60 60)"/>
+            {% endfor %}
+            <circle cx="60" cy="60" r="28" fill="white"/>
+            <text x="60" y="64" text-anchor="middle" font-size="9" fill="#7a6a5a">IL</text>
+        </svg>
+        <div class="savings-pie-legend">
+            {% for slice in il_sector_pie %}
+            <div class="savings-legend-item">
+                <span class="savings-legend-dot" style="background:{{ slice.color }}"></span>
+                <span>{{ slice.name }} — {{ "%.1f"|format(slice.pct) }}%</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color:#7a6a5a;font-size:0.82rem;text-align:center;margin-top:24px">No data yet.</p>
+        {% endif %}
+    </div>
+
+    <div class="savings-stat-card" style="min-width:260px">
+        <div class="savings-stat-label">Top Stock Exposure</div>
+        {% if stock_exposure %}
+        <table class="savings-holdings-table" style="margin-top:0.5rem">
+            <thead><tr><th style="text-align:left">Ticker</th><th>% of Portfolio</th></tr></thead>
+            <tbody>
+            {% for s in stock_exposure %}
+            <tr>
+                <td style="text-align:left"><strong>{{ s.ticker }}</strong><br>
+                    <span class="savings-holding-name">{{ s.name }}</span></td>
+                <td>{{ "%.1f"|format(s.pct) }}%</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color:#7a6a5a;font-size:0.82rem;text-align:center;margin-top:24px">No data yet.</p>
+        {% endif %}
+    </div>
+</div>
+
 {# Category sections #}
 {% set pie_colors = {'etf': '#6b4f2a', 'stocks': '#c8a96e', 'mmf': '#81c784'} %}
 {% for cat in categories %}
@@ -723,6 +807,18 @@ document.getElementById('alarm-search').addEventListener('input', function() {
                     </form>
                     {% else %}
                     <div class="savings-actions">
+                        {% if not loop.first %}
+                        <form method="post" action="{{ url_for('savings_move', hid=h.id) }}" style="display:inline">
+                            <input type="hidden" name="direction" value="up">
+                            <button type="submit" class="btn-xs" title="Move up">▲</button>
+                        </form>
+                        {% endif %}
+                        {% if not loop.last %}
+                        <form method="post" action="{{ url_for('savings_move', hid=h.id) }}" style="display:inline">
+                            <input type="hidden" name="direction" value="down">
+                            <button type="submit" class="btn-xs" title="Move down">▼</button>
+                        </form>
+                        {% endif %}
                         <a href="{{ url_for('savings_edit', hid=h.id) }}" class="btn-xs">Edit</a>
                         <form method="post" action="{{ url_for('savings_delete', hid=h.id) }}"
                               style="display:inline"
