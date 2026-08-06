@@ -1444,6 +1444,35 @@ def test_savings_move_does_not_reorder_other_category(savings_client):
     assert {h["id"] for h in holdings} == {"a", "e"}
 
 
+def test_savings_reorder_sets_explicit_order(savings_client):
+    c, savings_file = savings_client
+    savings_file.write_text(json.dumps([
+        {"id": "a", "ticker": "AAA", "category": "stocks", "shares": 1, "cost_basis": 100,
+         "currency": "USD", "source": "yfinance", "name": "A", "tase_id": "", "tase_type": "",
+         "last_updated": "2026-05-06T10:00:00+00:00"},
+        {"id": "b", "ticker": "BBB", "category": "stocks", "shares": 1, "cost_basis": 100,
+         "currency": "USD", "source": "yfinance", "name": "B", "tase_id": "", "tase_type": "",
+         "last_updated": "2026-05-06T10:00:00+00:00"},
+        {"id": "c", "ticker": "CCC", "category": "stocks", "shares": 1, "cost_basis": 100,
+         "currency": "USD", "source": "yfinance", "name": "C", "tase_id": "", "tase_type": "",
+         "last_updated": "2026-05-06T10:00:00+00:00"},
+    ]))
+    login(c)
+    resp = c.post("/savings/reorder", json={"ids": ["c", "a", "b"]})
+    assert resp.status_code == 200
+    assert resp.get_json()["ok"] is True
+    holdings = json.loads(savings_file.read_text())
+    order = {h["id"]: h["order"] for h in holdings}
+    assert order["c"] < order["a"] < order["b"]
+
+
+def test_savings_reorder_requires_ids(savings_client):
+    c, _ = savings_client
+    login(c)
+    resp = c.post("/savings/reorder", json={})
+    assert resp.status_code == 400
+
+
 def test_savings_page_renders_no_data_state_when_no_analysis_cache(savings_client):
     c, _ = savings_client
     login(c)

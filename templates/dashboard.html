@@ -742,7 +742,7 @@ document.getElementById('alarm-search').addEventListener('input', function() {
             {% for h in cat_holdings %}
             {% set hd = holding_data[h.id] %}
             {% set curr = '₪' if h.currency == 'ILS' else '$' %}
-            <tr>
+            <tr data-hid="{{ h.id }}" ondragover="onRowDragOver(event)" ondrop="onRowDrop(event)">
                 <td style="text-align:left">
                     {% if cat == 'etf' %}
                     <strong>{{ h.name or h.ticker }}</strong>
@@ -793,6 +793,21 @@ document.getElementById('alarm-search').addEventListener('input', function() {
                 <td>
                     {% if cat != 'mmf' %}
                     <div class="savings-actions" id="actions-{{ h.id }}">
+                        <span class="drag-handle" draggable="true"
+                              ondragstart="onHandleDragStart(event)" ondragend="onRowDragEnd(event)"
+                              title="Drag to reorder">⠿</span>
+                        {% if not loop.first %}
+                        <form method="post" action="{{ url_for('savings_move', hid=h.id) }}" style="display:inline">
+                            <input type="hidden" name="direction" value="up">
+                            <button type="submit" class="btn-xs" title="Move up">▲</button>
+                        </form>
+                        {% endif %}
+                        {% if not loop.last %}
+                        <form method="post" action="{{ url_for('savings_move', hid=h.id) }}" style="display:inline">
+                            <input type="hidden" name="direction" value="down">
+                            <button type="submit" class="btn-xs" title="Move down">▼</button>
+                        </form>
+                        {% endif %}
                         <a href="{{ url_for('savings_edit', hid=h.id) }}" class="btn-xs">Edit</a>
                         <button type="button" class="btn-xs danger"
                                 onclick="startDeleteConfirm('{{ h.id }}')">×</button>
@@ -807,6 +822,9 @@ document.getElementById('alarm-search').addEventListener('input', function() {
                     </form>
                     {% else %}
                     <div class="savings-actions">
+                        <span class="drag-handle" draggable="true"
+                              ondragstart="onHandleDragStart(event)" ondragend="onRowDragEnd(event)"
+                              title="Drag to reorder">⠿</span>
                         {% if not loop.first %}
                         <form method="post" action="{{ url_for('savings_move', hid=h.id) }}" style="display:inline">
                             <input type="hidden" name="direction" value="up">
@@ -945,6 +963,52 @@ function startDeleteConfirm(hid) {
 function cancelDeleteConfirm(hid) {
     document.getElementById('delete-form-' + hid).style.display = 'none';
     document.getElementById('actions-' + hid).style.display = '';
+}
+
+let dragSrcHid = null;
+let dragSrcTable = null;
+
+function onHandleDragStart(event) {
+    const tr = event.target.closest('tr');
+    if (!tr) return;
+    dragSrcHid = tr.dataset.hid;
+    dragSrcTable = tr.closest('table');
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', dragSrcHid);
+    tr.classList.add('dragging');
+}
+
+function onRowDragOver(event) {
+    if (!dragSrcHid) return;
+    event.preventDefault();
+    const tr = event.currentTarget;
+    if (tr.dataset.hid === dragSrcHid || tr.closest('table') !== dragSrcTable) return;
+    const srcRow = dragSrcTable.querySelector('tr[data-hid="' + dragSrcHid + '"]');
+    if (!srcRow) return;
+    const rect = tr.getBoundingClientRect();
+    const before = (event.clientY - rect.top) < rect.height / 2;
+    tr.parentNode.insertBefore(srcRow, before ? tr : tr.nextSibling);
+}
+
+function onRowDrop(event) {
+    event.preventDefault();
+}
+
+function onRowDragEnd(event) {
+    const tr = event.target.closest('tr');
+    if (tr) tr.classList.remove('dragging');
+    if (dragSrcTable) {
+        const ids = Array.from(dragSrcTable.querySelectorAll('tbody tr'))
+            .map(r => r.dataset.hid)
+            .filter(Boolean);
+        fetch('/savings/reorder', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ids: ids}),
+        }).catch(() => {});
+    }
+    dragSrcHid = null;
+    dragSrcTable = null;
 }
 </script>
 

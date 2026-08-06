@@ -891,6 +891,24 @@ form label { position: relative; }
     justify-content: flex-end;
 }
 
+.drag-handle {
+    display: inline-flex;
+    align-items: center;
+    cursor: grab;
+    color: #a89a8a;
+    font-size: 0.9rem;
+    padding: 0 0.15rem;
+    user-select: none;
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+.savings-holdings-table tbody tr.dragging {
+    opacity: 0.4;
+}
+
 .savings-add-row {
     display: flex;
     justify-content: flex-end;

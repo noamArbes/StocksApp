@@ -1126,6 +1126,25 @@ def savings_move(hid):
     return redirect(url_for("savings"))
 
 
+@app.route("/savings/reorder", methods=["POST"])
+@login_required
+def savings_reorder():
+    """Sets explicit order for a set of holdings (same category), for drag-and-drop reordering."""
+    data = request.get_json(silent=True) or {}
+    ids = data.get("ids")
+    if not isinstance(ids, list) or not ids:
+        return jsonify({"error": "ids is required"}), 400
+
+    def do_reorder(holdings):
+        id_to_order = {hid_: i for i, hid_ in enumerate(ids)}
+        for h in holdings:
+            if h.get("id") in id_to_order:
+                h["order"] = id_to_order[h["id"]]
+
+    modify_savings(do_reorder)
+    return jsonify({"ok": True})
+
+
 @app.route("/savings/refresh-analysis", methods=["POST"])
 @login_required
 def savings_refresh_analysis():
