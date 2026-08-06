@@ -678,6 +678,10 @@ document.getElementById('alarm-search').addEventListener('input', function() {
                           style="display:none" onsubmit="submitShares(event, '{{ h.id }}')">
                         <input type="number" step="any" min="0" class="savings-shares-input"
                                id="shares-input-{{ h.id }}" value="{{ h.shares }}">
+                        {% if cat != 'mmf' %}
+                        <input type="date" class="savings-shares-date"
+                               id="shares-date-{{ h.id }}">
+                        {% endif %}
                         <button type="submit">✓</button>
                         <button type="button" onclick="cancelSharesEdit('{{ h.id }}')">✕</button>
                     </form>
@@ -703,6 +707,21 @@ document.getElementById('alarm-search').addEventListener('input', function() {
                 </td>
                 <td><span class="savings-updated">{{ hd.last_updated_rel }}</span></td>
                 <td>
+                    {% if cat != 'mmf' %}
+                    <div class="savings-actions" id="actions-{{ h.id }}">
+                        <a href="{{ url_for('savings_edit', hid=h.id) }}" class="btn-xs">Edit</a>
+                        <button type="button" class="btn-xs danger"
+                                onclick="startDeleteConfirm('{{ h.id }}')">×</button>
+                    </div>
+                    <form class="savings-delete-form" id="delete-form-{{ h.id }}"
+                          method="post" action="{{ url_for('savings_delete', hid=h.id) }}"
+                          style="display:none">
+                        <input type="date" name="txn_date" class="savings-delete-date"
+                               id="delete-date-{{ h.id }}">
+                        <button type="submit" class="btn-xs danger">Confirm</button>
+                        <button type="button" onclick="cancelDeleteConfirm('{{ h.id }}')">✕</button>
+                    </form>
+                    {% else %}
                     <div class="savings-actions">
                         <a href="{{ url_for('savings_edit', hid=h.id) }}" class="btn-xs">Edit</a>
                         <form method="post" action="{{ url_for('savings_delete', hid=h.id) }}"
@@ -711,6 +730,7 @@ document.getElementById('alarm-search').addEventListener('input', function() {
                             <button type="submit" class="btn-xs danger">×</button>
                         </form>
                     </div>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
@@ -784,6 +804,8 @@ function startSharesEdit(el, current) {
     el.style.display = 'none';
     const form = document.getElementById('shares-form-' + hid);
     form.style.display = 'inline-flex';
+    const dateInput = document.getElementById('shares-date-' + hid);
+    if (dateInput) dateInput.value = new Date().toISOString().slice(0, 10);
     const input = document.getElementById('shares-input-' + hid);
     input.focus();
     input.select();
@@ -798,10 +820,12 @@ function submitShares(event, hid) {
     event.preventDefault();
     const input = document.getElementById('shares-input-' + hid);
     const shares = input.value;
+    const dateInput = document.getElementById('shares-date-' + hid);
+    const txnDate = dateInput ? dateInput.value : '';
     fetch('/savings/' + hid + '/shares', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: 'shares=' + encodeURIComponent(shares),
+        body: 'shares=' + encodeURIComponent(shares) + '&txn_date=' + encodeURIComponent(txnDate),
     })
     .then(r => r.json())
     .then(data => {
@@ -812,6 +836,19 @@ function submitShares(event, hid) {
             document.getElementById('shares-form-' + hid).style.display = 'none';
         }
     });
+}
+
+function startDeleteConfirm(hid) {
+    document.getElementById('actions-' + hid).style.display = 'none';
+    const form = document.getElementById('delete-form-' + hid);
+    form.style.display = 'inline-flex';
+    const dateInput = document.getElementById('delete-date-' + hid);
+    dateInput.value = new Date().toISOString().slice(0, 10);
+}
+
+function cancelDeleteConfirm(hid) {
+    document.getElementById('delete-form-' + hid).style.display = 'none';
+    document.getElementById('actions-' + hid).style.display = '';
 }
 </script>
 

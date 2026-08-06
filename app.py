@@ -192,6 +192,93 @@ def _fetch_savings_prices(holdings: list) -> dict:
     return prices
 
 
+# --- Auto trade-history logging for savings changes ---
+
+AUTO_TRADE_CATEGORIES = ("stocks", "etf")
+_SHARE_EPSILON = 1e-9
+
+
+def _parse_txn_date(form) -> str:
+    """Parses an optional txn_date form field (YYYY-MM-DD), falling back to today."""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    raw = (form.get("txn_date") or "").strip()
+    if not raw:
+        return today
+    try:
+        datetime.strptime(raw, "%Y-%m-%d")
+        return raw
+    except ValueError:
+        return today
+
+
+def _current_market_price(holding: dict):
+    """Best-effort live price for a single holding. Never raises."""
+    try:
+        if holding.get("source") == "tase":
+            return tase.get_price(holding["tase_id"], holding["tase_type"])
+        price, _ = checker.get_price_with_change(holding["ticker"])
+        return price
+    except Exception:
+        return None
+
+
+def _avg_cost_per_share(holding: dict):
+    shares = holding.get("shares") or 0
+    cost = holding.get("cost_basis")
+    if shares and cost is not None:
+        return cost / shares
+    return None
+
+
+def _auto_trade(holding: dict, trade_type: str, shares: float, price: float,
+                 buy_price=None, txn_date=None) -> dict:
+    """Builds a trade dict for a buy/sell inferred from a savings holding change."""
+    d = txn_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    is_buy = trade_type == "buy"
+    return {
+        "id": str(uuid.uuid4())[:8],
+        "type": trade_type,
+        "ticker": holding.get("ticker"),
+        "name": holding.get("name"),
+        "source": holding.get("source", "yfinance"),
+        "shares": round(shares, 6),
+        "buy_price": round(price, 4) if is_buy else (round(buy_price, 4) if buy_price is not None else None),
+        "buy_date": d if is_buy else None,
+        "sell_price": None if is_buy else round(price, 4),
+        "sell_date": None if is_buy else d,
+        "buy_amount_ils": None,
+        "sell_amount_ils": None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _log_auto_trade_for_shares_delta(before_holding, after_holding, delta_shares,
+                                      delta_cost, txn_date):
+    """Appends a buy/sell trade for a shares delta on an existing stocks/etf holding."""
+    if after_holding.get("category") not in AUTO_TRADE_CATEGORIES:
+        return
+    if delta_shares > _SHARE_EPSILON:
+        if delta_cost > 0:
+            price = delta_cost / delta_shares
+        else:
+            price = _current_market_price(after_holding)
+            if price is None:
+                price = _avg_cost_per_share(before_holding)
+        if price is not None:
+            trade = _auto_trade(after_holding, "buy", delta_shares, price, txn_date=txn_date)
+            modify_trades(lambda trades: trades.append(trade))
+    elif delta_shares < -_SHARE_EPSILON:
+        sold = -delta_shares
+        sell_price = _current_market_price(after_holding)
+        if sell_price is None:
+            sell_price = _avg_cost_per_share(before_holding)
+        buy_price = _avg_cost_per_share(before_holding)
+        if sell_price is not None:
+            trade = _auto_trade(after_holding, "sell", sold, sell_price,
+                                 buy_price=buy_price, txn_date=txn_date)
+            modify_trades(lambda trades: trades.append(trade))
+
+
 def _holding_from_form(form, existing=None):
     """Parse and validate holding form data. Returns (holding_dict, error_str|None)."""
     source = form.get("source", "yfinance")
@@ -642,12 +729,17 @@ def siemens_edit():
         try:
             shares = float(request.form.get("shares", "").strip())
             total_value_ils = float(request.form.get("total_value_ils", "").strip())
-            gain_ils = float(request.form.get("gain_ils", "").strip())
             gain_pct = float(request.form.get("gain_pct", "").strip())
         except ValueError:
             return render_template("siemens_form.html",
                                    error="All fields must be numbers",
                                    form=request.form)
+        if gain_pct <= -100:
+            return render_template("siemens_form.html",
+                                   error="Percentage Gained cannot be -100% or lower",
+                                   form=request.form)
+        cost_basis = total_value_ils / (1 + gain_pct / 100)
+        gain_ils = total_value_ils - cost_basis
         write_siemens({
             "shares": shares,
             "total_value_ils": total_value_ils,
@@ -843,18 +935,25 @@ def savings():
 @login_required
 def savings_new():
     category = request.args.get("category", "stocks")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     if request.method == "POST":
         holding, error = _holding_from_form(request.form)
         if error:
             return render_template("savings_form.html", error=error,
                                    form=request.form, title="Add Holding",
-                                   category=request.form.get("category", category))
+                                   category=request.form.get("category", category),
+                                   today=today)
         def do_append(holdings):
             holdings.append(holding)
         modify_savings(do_append)
+        if holding["category"] in AUTO_TRADE_CATEGORIES and holding["shares"] > _SHARE_EPSILON:
+            price = holding["cost_basis"] / holding["shares"]
+            txn_date = _parse_txn_date(request.form)
+            trade = _auto_trade(holding, "buy", holding["shares"], price, txn_date=txn_date)
+            modify_trades(lambda trades: trades.append(trade))
         return redirect(url_for("savings"))
     return render_template("savings_form.html", form={"category": category},
-                           title="Add Holding", category=category)
+                           title="Add Holding", category=category, today=today)
 
 
 @app.route("/savings/<hid>/edit", methods=["GET", "POST"])
@@ -864,31 +963,52 @@ def savings_edit(hid):
     holding = next((h for h in holdings if h.get("id") == hid), None)
     if holding is None:
         return redirect(url_for("savings"))
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     if request.method == "POST":
         updated, error = _holding_from_form(request.form, existing=holding)
         if error:
             return render_template("savings_form.html", error=error,
                                    form=request.form, holding=holding,
                                    title="Edit Holding",
-                                   category=holding["category"])
+                                   category=holding["category"], today=today)
+        before_shares = holding.get("shares") or 0
+        before_cost = holding.get("cost_basis") or 0
         def do_update(holdings):
             for i, h in enumerate(holdings):
                 if h.get("id") == hid:
                     holdings[i] = updated
                     break
         modify_savings(do_update)
+        delta_shares = updated["shares"] - before_shares
+        delta_cost = updated["cost_basis"] - before_cost
+        txn_date = _parse_txn_date(request.form)
+        _log_auto_trade_for_shares_delta(holding, updated, delta_shares, delta_cost, txn_date)
         return redirect(url_for("savings"))
     return render_template("savings_form.html", form=dict(holding),
                            holding=holding, title="Edit Holding",
-                           category=holding["category"])
+                           category=holding["category"], today=today)
 
 
 @app.route("/savings/<hid>/delete", methods=["POST"])
 @login_required
 def savings_delete(hid):
+    holdings_before = read_savings()
+    before = next((h for h in holdings_before if h.get("id") == hid), None)
     def do_delete(holdings):
         holdings[:] = [h for h in holdings if h.get("id") != hid]
     modify_savings(do_delete)
+    if before and before.get("category") in AUTO_TRADE_CATEGORIES:
+        shares = before.get("shares") or 0
+        if shares > _SHARE_EPSILON:
+            sell_price = _current_market_price(before)
+            if sell_price is None:
+                sell_price = _avg_cost_per_share(before)
+            buy_price = _avg_cost_per_share(before)
+            if sell_price is not None:
+                txn_date = _parse_txn_date(request.form)
+                trade = _auto_trade(before, "sell", shares, sell_price,
+                                     buy_price=buy_price, txn_date=txn_date)
+                modify_trades(lambda trades: trades.append(trade))
     return redirect(url_for("savings"))
 
 
@@ -900,6 +1020,8 @@ def savings_update_shares(hid):
         shares = float(shares_raw)
     except ValueError:
         return jsonify({"error": "Invalid shares value"}), 400
+    holdings_before = read_savings()
+    before = next((h for h in holdings_before if h.get("id") == hid), None)
     updated_ts = datetime.now(timezone.utc).isoformat()
     found = [False]
     def do_update(holdings):
@@ -912,6 +1034,11 @@ def savings_update_shares(hid):
     modify_savings(do_update)
     if not found[0]:
         return jsonify({"error": "Holding not found"}), 404
+    if before and before.get("category") in AUTO_TRADE_CATEGORIES:
+        delta_shares = shares - (before.get("shares") or 0)
+        after = dict(before, shares=shares)
+        txn_date = _parse_txn_date(request.form)
+        _log_auto_trade_for_shares_delta(before, after, delta_shares, 0, txn_date)
     return jsonify({"ok": True, "shares": shares,
                     "last_updated_rel": _relative_time(updated_ts)})
 

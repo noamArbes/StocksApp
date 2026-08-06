@@ -9,17 +9,12 @@
                 value="{{ form.get('shares') or '' }}"
                 placeholder="e.g. 24.83" required>
         </label>
-        <label>Total Value (₪) *
+        <label>Current Amount (₪) *
             <input type="number" step="any" name="total_value_ils"
                 value="{{ form.get('total_value_ils') or '' }}"
                 placeholder="e.g. 42500" required>
         </label>
-        <label>Gain (₪) *
-            <input type="number" step="any" name="gain_ils"
-                value="{{ form.get('gain_ils') or '' }}"
-                placeholder="e.g. 3200 (negative if loss)" required>
-        </label>
-        <label>Gain % *
+        <label>Percentage Gained (%) *
             <input type="number" step="any" name="gain_pct"
                 value="{{ form.get('gain_pct') or '' }}"
                 placeholder="e.g. 8.1 (negative if loss)" required>

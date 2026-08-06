@@ -1159,9 +1159,12 @@ def savings_client(tmp_path, monkeypatch):
     savings_file.write_text(json.dumps([]))
     snapshots_file = tmp_path / "savings_snapshots.json"
     snapshots_file.write_text(json.dumps([]))
+    trades_file = tmp_path / "trades.json"
+    trades_file.write_text(json.dumps([]))
     monkeypatch.setattr(app_module, "_alarms_path", lambda: str(alarms_file))
     monkeypatch.setattr(app_module, "_SAVINGS_PATH", str(savings_file))
     monkeypatch.setattr(app_module, "_SNAPSHOTS_PATH", str(snapshots_file))
+    monkeypatch.setattr(app_module, "_trades_path", lambda: str(trades_file))
     monkeypatch.setattr(app_module, "_fetch_savings_prices", lambda h: {})
     monkeypatch.setattr(app_module.checker, "get_usd_to_ils", lambda: 3.7)
     flask_app.config["TESTING"] = True
@@ -1176,48 +1179,218 @@ def test_savings_page_loads(savings_client):
     assert resp.status_code == 200
 
 
-def test_savings_new_post_adds_holding(savings_client, monkeypatch):
+def test_savings_new_post_adds_holding(savings_client, tmp_path, monkeypatch):
     c, savings_file = savings_client
     monkeypatch.setattr(app_module.checker, "get_price_with_change", lambda t: (500.0, 495.0))
     login(c)
     resp = c.post("/savings/new", data={
         "source": "yfinance", "ticker": "VOO", "name": "Vanguard",
         "category": "etf", "current_value": "5000", "total_change": "500",
-        "currency": "USD",
+        "currency": "USD", "txn_date": "2026-05-01",
     }, follow_redirects=True)
     assert resp.status_code == 200
     holdings = json.loads(savings_file.read_text())
     assert len(holdings) == 1
     assert holdings[0]["ticker"] == "VOO"
+    trades = json.loads((tmp_path / "trades.json").read_text())
+    assert len(trades) == 1
+    assert trades[0]["type"] == "buy"
+    assert trades[0]["ticker"] == "VOO"
+    assert trades[0]["buy_date"] == "2026-05-01"
 
 
-def test_savings_delete_removes_holding(savings_client):
+def test_savings_new_post_skips_mmf_trade(savings_client, tmp_path):
     c, savings_file = savings_client
+    login(c)
+    resp = c.post("/savings/new", data={
+        "source": "yfinance", "ticker": "VMFXX", "name": "MMF",
+        "category": "mmf", "shares": "1000", "cost_basis": "1000",
+        "currency": "USD",
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+    trades = json.loads((tmp_path / "trades.json").read_text())
+    assert trades == []
+
+
+def test_savings_delete_removes_holding(savings_client, tmp_path, monkeypatch):
+    c, savings_file = savings_client
+    monkeypatch.setattr(app_module.checker, "get_price_with_change", lambda t: (550.0, 545.0))
     savings_file.write_text(json.dumps([{"id": "abc123", "ticker": "VOO",
         "category": "etf", "shares": 10, "cost_basis": 5000, "currency": "USD",
         "source": "yfinance", "name": "Vanguard", "tase_id": "", "tase_type": "",
+        "last_updated": "2026-05-06T10:00:00+00:00"}]))
+    login(c)
+    resp = c.post("/savings/abc123/delete", data={"txn_date": "2026-05-10"}, follow_redirects=True)
+    assert resp.status_code == 200
+    holdings = json.loads(savings_file.read_text())
+    assert holdings == []
+    trades = json.loads((tmp_path / "trades.json").read_text())
+    assert len(trades) == 1
+    assert trades[0]["type"] == "sell"
+    assert trades[0]["ticker"] == "VOO"
+    assert trades[0]["shares"] == 10
+    assert trades[0]["sell_date"] == "2026-05-10"
+
+
+def test_savings_delete_skips_mmf(savings_client, tmp_path):
+    c, savings_file = savings_client
+    savings_file.write_text(json.dumps([{"id": "abc123", "ticker": "VMFXX",
+        "category": "mmf", "shares": 1000, "cost_basis": 1000, "currency": "USD",
+        "source": "yfinance", "name": "MMF", "tase_id": "", "tase_type": "",
         "last_updated": "2026-05-06T10:00:00+00:00"}]))
     login(c)
     resp = c.post("/savings/abc123/delete", follow_redirects=True)
     assert resp.status_code == 200
-    holdings = json.loads(savings_file.read_text())
-    assert holdings == []
+    trades = json.loads((tmp_path / "trades.json").read_text())
+    assert trades == []
 
 
-def test_savings_inline_shares_update(savings_client):
+def test_savings_inline_shares_update(savings_client, tmp_path, monkeypatch):
     c, savings_file = savings_client
+    monkeypatch.setattr(app_module.checker, "get_price_with_change", lambda t: (550.0, 545.0))
     savings_file.write_text(json.dumps([{"id": "abc123", "ticker": "VOO",
         "category": "etf", "shares": 10, "cost_basis": 5000, "currency": "USD",
         "source": "yfinance", "name": "Vanguard", "tase_id": "", "tase_type": "",
         "last_updated": "2026-05-06T10:00:00+00:00"}]))
     login(c)
-    resp = c.post("/savings/abc123/shares", data={"shares": "15.5"})
+    resp = c.post("/savings/abc123/shares", data={"shares": "15.5", "txn_date": "2026-05-11"})
     assert resp.status_code == 200
     data = json.loads(resp.data)
     assert data["ok"] is True
     assert data["shares"] == 15.5
     holdings = json.loads(savings_file.read_text())
     assert holdings[0]["shares"] == 15.5
+    trades = json.loads((tmp_path / "trades.json").read_text())
+    assert len(trades) == 1
+    assert trades[0]["type"] == "buy"
+    assert trades[0]["shares"] == pytest.approx(5.5)
+    assert trades[0]["buy_price"] == 550.0
+    assert trades[0]["buy_date"] == "2026-05-11"
+
+
+def test_savings_inline_shares_decrease_logs_sell(savings_client, tmp_path, monkeypatch):
+    c, savings_file = savings_client
+    monkeypatch.setattr(app_module.checker, "get_price_with_change", lambda t: (550.0, 545.0))
+    savings_file.write_text(json.dumps([{"id": "abc123", "ticker": "VOO",
+        "category": "etf", "shares": 10, "cost_basis": 5000, "currency": "USD",
+        "source": "yfinance", "name": "Vanguard", "tase_id": "", "tase_type": "",
+        "last_updated": "2026-05-06T10:00:00+00:00"}]))
+    login(c)
+    resp = c.post("/savings/abc123/shares", data={"shares": "4", "txn_date": "2026-05-11"})
+    assert resp.status_code == 200
+    trades = json.loads((tmp_path / "trades.json").read_text())
+    assert len(trades) == 1
+    assert trades[0]["type"] == "sell"
+    assert trades[0]["shares"] == pytest.approx(6)
+    assert trades[0]["sell_price"] == 550.0
+    assert trades[0]["buy_price"] == 500.0  # old avg cost = 5000 / 10
+    assert trades[0]["sell_date"] == "2026-05-11"
+
+
+def test_savings_inline_shares_update_skips_mmf(savings_client, tmp_path):
+    c, savings_file = savings_client
+    savings_file.write_text(json.dumps([{"id": "abc123", "ticker": "VMFXX",
+        "category": "mmf", "shares": 1000, "cost_basis": 1000, "currency": "USD",
+        "source": "yfinance", "name": "MMF", "tase_id": "", "tase_type": "",
+        "last_updated": "2026-05-06T10:00:00+00:00"}]))
+    login(c)
+    resp = c.post("/savings/abc123/shares", data={"shares": "1500"})
+    assert resp.status_code == 200
+    trades = json.loads((tmp_path / "trades.json").read_text())
+    assert trades == []
+
+
+def _stock_holding(**overrides):
+    holding = {"id": "abc123", "ticker": "MSFT", "category": "stocks",
+               "shares": 10, "cost_basis": 3000, "currency": "USD",
+               "source": "yfinance", "name": "Microsoft", "tase_id": "", "tase_type": "",
+               "last_updated": "2026-05-06T10:00:00+00:00"}
+    holding.update(overrides)
+    return holding
+
+
+def test_savings_edit_shares_increase_logs_buy_with_incremental_cost(savings_client, tmp_path):
+    c, savings_file = savings_client
+    savings_file.write_text(json.dumps([_stock_holding()]))
+    login(c)
+    resp = c.post("/savings/abc123/edit", data={
+        "source": "yfinance", "ticker": "MSFT", "name": "Microsoft",
+        "category": "stocks", "shares": "15", "cost_basis": "4500",
+        "currency": "USD", "txn_date": "2026-05-12",
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+    trades = json.loads((tmp_path / "trades.json").read_text())
+    assert len(trades) == 1
+    assert trades[0]["type"] == "buy"
+    assert trades[0]["shares"] == pytest.approx(5)
+    assert trades[0]["buy_price"] == pytest.approx(300.0)  # (4500-3000)/5
+    assert trades[0]["buy_date"] == "2026-05-12"
+
+
+def test_savings_edit_shares_increase_without_cost_change_uses_market_price(savings_client, tmp_path, monkeypatch):
+    c, savings_file = savings_client
+    monkeypatch.setattr(app_module.checker, "get_price_with_change", lambda t: (320.0, 315.0))
+    savings_file.write_text(json.dumps([_stock_holding()]))
+    login(c)
+    resp = c.post("/savings/abc123/edit", data={
+        "source": "yfinance", "ticker": "MSFT", "name": "Microsoft",
+        "category": "stocks", "shares": "15", "cost_basis": "3000",
+        "currency": "USD",
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+    trades = json.loads((tmp_path / "trades.json").read_text())
+    assert len(trades) == 1
+    assert trades[0]["type"] == "buy"
+    assert trades[0]["shares"] == pytest.approx(5)
+    assert trades[0]["buy_price"] == 320.0
+
+
+def test_savings_edit_shares_decrease_logs_sell(savings_client, tmp_path, monkeypatch):
+    c, savings_file = savings_client
+    monkeypatch.setattr(app_module.checker, "get_price_with_change", lambda t: (350.0, 345.0))
+    savings_file.write_text(json.dumps([_stock_holding()]))
+    login(c)
+    resp = c.post("/savings/abc123/edit", data={
+        "source": "yfinance", "ticker": "MSFT", "name": "Microsoft",
+        "category": "stocks", "shares": "4", "cost_basis": "3000",
+        "currency": "USD", "txn_date": "2026-05-13",
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+    trades = json.loads((tmp_path / "trades.json").read_text())
+    assert len(trades) == 1
+    assert trades[0]["type"] == "sell"
+    assert trades[0]["shares"] == pytest.approx(6)
+    assert trades[0]["sell_price"] == 350.0
+    assert trades[0]["buy_price"] == 300.0  # old avg cost = 3000/10
+    assert trades[0]["sell_date"] == "2026-05-13"
+
+
+def test_savings_edit_unchanged_shares_and_cost_logs_no_trade(savings_client, tmp_path):
+    c, savings_file = savings_client
+    savings_file.write_text(json.dumps([_stock_holding()]))
+    login(c)
+    resp = c.post("/savings/abc123/edit", data={
+        "source": "yfinance", "ticker": "MSFT", "name": "Microsoft Corp",
+        "category": "stocks", "shares": "10", "cost_basis": "3000",
+        "currency": "USD", "region": "us",
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+    trades = json.loads((tmp_path / "trades.json").read_text())
+    assert trades == []
+
+
+def test_savings_edit_skips_mmf_category(savings_client, tmp_path):
+    c, savings_file = savings_client
+    savings_file.write_text(json.dumps([_stock_holding(category="mmf", ticker="VMFXX")]))
+    login(c)
+    resp = c.post("/savings/abc123/edit", data={
+        "source": "yfinance", "ticker": "VMFXX", "name": "MMF",
+        "category": "mmf", "shares": "20", "cost_basis": "6000",
+        "currency": "USD",
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+    trades = json.loads((tmp_path / "trades.json").read_text())
+    assert trades == []
 
 
 def test_load_siemens_returns_none_when_file_missing():
@@ -1265,14 +1438,79 @@ def test_siemens_edit_post_saves_and_redirects(tmp_path, monkeypatch):
         resp = c.post("/siemens/edit", data={
             "shares": "24.83",
             "total_value_ils": "42500",
-            "gain_ils": "3200",
             "gain_pct": "8.1",
         })
     assert resp.status_code == 302
     saved = json.loads(siemens_file.read_text())
     assert saved["shares"] == 24.83
     assert saved["gain_pct"] == 8.1
+    expected_cost_basis = 42500 / (1 + 8.1 / 100)
+    expected_gain_ils = 42500 - expected_cost_basis
+    assert saved["gain_ils"] == pytest.approx(expected_gain_ils)
     assert "last_updated" in saved
+
+
+def test_siemens_edit_post_computes_gain_ils_from_pct(tmp_path, monkeypatch):
+    """Verified against a real brokerage screenshot: total 41570.81, gain 36.79% -> gain ~11179.51."""
+    siemens_file = tmp_path / "siemens.json"
+    monkeypatch.setattr(app_module, "_SIEMENS_PATH", str(siemens_file))
+    flask_app.config["TESTING"] = True
+    with flask_app.test_client() as c:
+        login(c)
+        resp = c.post("/siemens/edit", data={
+            "shares": "41.802",
+            "total_value_ils": "41570.81",
+            "gain_pct": "36.79",
+        })
+    assert resp.status_code == 302
+    saved = json.loads(siemens_file.read_text())
+    # The screenshot's 36.79% is itself rounded to 2dp, so the derived ₪ amount
+    # is only accurate to within that rounding, not floating-point precision.
+    assert saved["gain_ils"] == pytest.approx(11179.51, abs=2)
+
+
+def test_siemens_edit_post_negative_gain_pct(tmp_path, monkeypatch):
+    siemens_file = tmp_path / "siemens.json"
+    monkeypatch.setattr(app_module, "_SIEMENS_PATH", str(siemens_file))
+    flask_app.config["TESTING"] = True
+    with flask_app.test_client() as c:
+        login(c)
+        resp = c.post("/siemens/edit", data={
+            "shares": "10",
+            "total_value_ils": "8000",
+            "gain_pct": "-20",
+        })
+    assert resp.status_code == 302
+    saved = json.loads(siemens_file.read_text())
+    assert saved["gain_ils"] < 0
+
+
+def test_siemens_edit_post_rejects_negative_100_pct(tmp_path, monkeypatch):
+    siemens_file = tmp_path / "siemens.json"
+    monkeypatch.setattr(app_module, "_SIEMENS_PATH", str(siemens_file))
+    flask_app.config["TESTING"] = True
+    with flask_app.test_client() as c:
+        login(c)
+        resp = c.post("/siemens/edit", data={
+            "shares": "10",
+            "total_value_ils": "8000",
+            "gain_pct": "-100",
+        })
+    assert resp.status_code == 200
+    assert b"Percentage Gained" in resp.data
+    assert not siemens_file.exists()
+
+
+def test_siemens_edit_form_no_longer_has_gain_ils_field(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "_SIEMENS_PATH", str(tmp_path / "siemens.json"))
+    flask_app.config["TESTING"] = True
+    with flask_app.test_client() as c:
+        login(c)
+        resp = c.get("/siemens/edit")
+    assert resp.status_code == 200
+    assert b'name="gain_ils"' not in resp.data
+    assert b'name="total_value_ils"' in resp.data
+    assert b'name="gain_pct"' in resp.data
 
 
 def test_savings_includes_siemens_in_total(savings_client, tmp_path, monkeypatch):

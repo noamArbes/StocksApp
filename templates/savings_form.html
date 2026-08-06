@@ -96,6 +96,12 @@
         <input type="hidden" name="currency" id="currency-hidden"
             value="{{ 'ILS' if is_tase else form.get('currency', 'USD') }}">
 
+        {% if category != 'mmf' %}
+        <label>Transaction Date
+            <input type="date" name="txn_date" value="{{ today }}">
+        </label>
+        {% endif %}
+
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">Save</button>
             <a href="{{ url_for('savings') }}" class="btn">Cancel</a>
